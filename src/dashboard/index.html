@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Watch Folder Dashboard</title>
+    <style>
+        body { font-family: Arial; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background: white; padding: 20px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; text-align: center; }
+        .status { background: #27ae60; color: white; padding: 15px; border-radius: 4px; margin: 10px 0; }
+        .config-item { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 4px; }
+        .btn { padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .btn-primary { background: #27ae60 !important; }
+        .btn-warning { background: #f39c12 !important; }
+        .btn-secondary { background: #95a5a6 !important; cursor: not-allowed !important; opacity: 0.6 !important; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; width: 300px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Watch Folder Dashboard</h1>
+            <p>Konfiguration und Überwachung</p>
+        </div>
+
+
+
+        <div class="card">
+            <h2>Watch Folder Konfiguration</h2>
+            <div class="config-item">
+                <strong>Watch Folder:</strong><br>
+                <input type="text" id="watchPath" value="C:\Temp\Incoming" placeholder="Pfad zum Watch Folder" oninput="updateWatchFolder(0, 'Path', this.value)">
+                <button class="btn" onclick="browseFolder('watchPath')">Ordner wählen</button>
+            </div>
+            
+            <div class="config-item">
+                <strong>Karenzzeit (in Sekunden):</strong><br>
+                <input type="number" id="gracePeriod" value="30" placeholder="Sekunden" oninput="updateWatchFolder(0, 'GracePeriod', parseInt(this.value))">
+            </div>
+        </div>        <div class="card">
+            <h2>Zielordner & Dateiformat-Konfiguration</h2>
+            <div id="targetFoldersConfig">
+                <p style="color: #666; font-style: italic;">Lade Zielordner-Konfiguration...</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Nachtverarbeitung</h2>
+            <div id="nightBatchStatus">
+                <!-- Status wird hier geladen -->
+            </div>
+            <div style="margin-top: 15px;">
+                <button id="startNightBatchBtn" class="btn btn-success" onclick="startNightBatch()" style="display: none;">
+                    🌙 Nachtverarbeitung starten
+                </button>
+            </div>
+            <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                <h4 style="margin: 0 0 10px 0;">Zeitfenster konfigurieren:</h4>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label>Start: <input type="time" id="nightStartTime" oninput="updateNightBatchWindow('start', this.value)"></label>
+                    <label>Ende: <input type="time" id="nightEndTime" oninput="updateNightBatchWindow('end', this.value)"></label>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Konfiguration speichern</h2>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="applyChangesBtn" class="btn btn-secondary" onclick="applyChanges()" disabled>
+                    ✅ Übernehmen
+                </button>
+                <button id="resetChangesBtn" class="btn btn-secondary" onclick="resetChanges()" disabled>
+                    🔄 Zurücksetzen
+                </button>
+            </div>
+            <p style="text-align: center; color: #666; font-size: 14px; margin-top: 10px;">
+                Änderungen werden erst nach Klick auf "Übernehmen" gespeichert
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // API-Base-URL dynamisch bestimmen
+        let apiBaseUrl;
+        if (window.location.protocol === 'file:') {
+            // Electron-App: Verwende StatusAPI auf Port 8082
+            apiBaseUrl = 'http://localhost:8082/api';
+        } else {
+            // Webserver: Verwende relativen Pfad
+            apiBaseUrl = window.location.origin + '/api';
+        }
+
+        // Konfiguration beim Laden laden
+
+        function setDefaultNightBatchTimes() {
+            isInitializing = true;
+            
+            // Standardwerte für Nachtverarbeitung setzen
+            document.getElementById('nightStartTime').value = "20:00";
+            document.getElementById('nightEndTime').value = "06:00";
+            
+            // Standardwerte auch in workingConfig und originalConfig setzen
+            if (!workingConfig.destinations) {
+                workingConfig.destinations = {};
+            }
+            if (!workingConfig.destinations.Night) {
+                workingConfig.destinations.Night = { ProcessingWindow: { Start: "20:00", End: "06:00" } };
+            }
+            if (!workingConfig.destinations.Night.ProcessingWindow) {
+                workingConfig.destinations.Night.ProcessingWindow = { Start: "20:00", End: "06:00" };
+            }
+            
+            // Gleiche Standardwerte auch in originalConfig setzen
+            if (!originalConfig.destinations) {
+                originalConfig.destinations = {};
+            }
+            if (!originalConfig.destinations.Night) {
+                originalConfig.destinations.Night = { ProcessingWindow: { Start: "20:00", End: "06:00" } };
+            }
+            if (!originalConfig.destinations.Night.ProcessingWindow) {
+                originalConfig.destinations.Night.ProcessingWindow = { Start: "20:00", End: "06:00" };
+            }
+            
+            isInitializing = false;
+        }
+
+        function loadConfig() {
+            fetch(apiBaseUrl + '/config')
+                .then(response => response.json())
+                .then(data => {
+                    config = JSON.parse(JSON.stringify(data)); // Deep copy
+                    originalConfig = JSON.parse(JSON.stringify(data)); // Deep copy
+                    workingConfig = JSON.parse(JSON.stringify(data)); // Deep copy
+                    updateUI();
+                })
+                .catch(error => {
+                    console.error('Fehler beim Laden der Konfiguration:', error);
+                    // Bei Fehler: Standardwerte verwenden
+                    setDefaultNightBatchTimes();
+                });
+        }
+
+        function updateUI() {
+            if (workingConfig.watchFolders && workingConfig.watchFolders.length > 0) {
+                document.getElementById('watchPath').value = workingConfig.watchFolders[0].Path;
+                document.getElementById('gracePeriod').value = workingConfig.watchFolders[0].GracePeriod;
+            }
+
+            if (workingConfig.destinations) {
+                document.getElementById('mamPath').value = workingConfig.destinations.MAM?.Path || 'C:\\Temp\\MAM';
+                document.getElementById('boxPath').value = workingConfig.destinations.BOX?.Path || 'C:\\Temp\\BOX';
+                document.getElementById('quarantinePath').value = workingConfig.quarantineFolder || 'C:\\Temp\\Quarantine';
+                
+                // Nachtverarbeitung-Zeitfenster aktualisieren
+                if (workingConfig.destinations.Night?.ProcessingWindow) {
+                    isInitializing = true;
+                    document.getElementById('nightStartTime').value = workingConfig.destinations.Night.ProcessingWindow.Start;
+                    document.getElementById('nightEndTime').value = workingConfig.destinations.Night.ProcessingWindow.End;
+                    isInitializing = false;
+                } else {
+                    // Standardwerte setzen wenn keine Konfiguration vorhanden
+                    isInitializing = true;
+                    if (!workingConfig.destinations.Night) {
+                        workingConfig.destinations.Night = { ProcessingWindow: { Start: "20:00", End: "06:00" } };
+                    }
+                    if (!workingConfig.destinations.Night.ProcessingWindow) {
+                        workingConfig.destinations.Night.ProcessingWindow = { Start: "20:00", End: "06:00" };
+                    }
+                    // Gleiche Standardwerte auch in originalConfig setzen
+                    if (!originalConfig.destinations.Night) {
+                        originalConfig.destinations.Night = { ProcessingWindow: { Start: "20:00", End: "06:00" } };
+                    }
+                    if (!originalConfig.destinations.Night.ProcessingWindow) {
+                        originalConfig.destinations.Night.ProcessingWindow = { Start: "20:00", End: "06:00" };
+                    }
+                    document.getElementById('nightStartTime').value = "20:00";
+                    document.getElementById('nightEndTime').value = "06:00";
+                    isInitializing = false;
+                }
+            }
+
+            // Buttons aktivieren/deaktivieren basierend auf Änderungen
+            updateButtonStates();
+        }
+
+        function updateButtonStates() {
+            const applyBtn = document.getElementById('applyChangesBtn');
+            const resetBtn = document.getElementById('resetChangesBtn');
+
+            if (hasUnsavedChanges) {
+                applyBtn.disabled = false;
+                applyBtn.classList.add('btn-primary');
+                applyBtn.classList.remove('btn-secondary');
+                resetBtn.disabled = false;
+                resetBtn.classList.add('btn-warning');
+                resetBtn.classList.remove('btn-secondary');
+            } else {
+                applyBtn.disabled = true;
+                applyBtn.classList.remove('btn-primary');
+                applyBtn.classList.add('btn-secondary');
+                resetBtn.disabled = true;
+                resetBtn.classList.remove('btn-warning');
+                resetBtn.classList.add('btn-secondary');
+            }
+        }
+
+        function updateWatchFolder(index, field, value) {
+            workingConfig.watchFolders[index][field] = value;
+            hasUnsavedChanges = true;
+            updateButtonStates();
+        }
+
+        function updateDestination(destinationName, field, value) {
+            if (!workingConfig.destinations) {
+                workingConfig.destinations = {};
+            }
+            if (!workingConfig.destinations[destinationName]) {
+                workingConfig.destinations[destinationName] = {};
+            }
+            workingConfig.destinations[destinationName][field] = value;
+            hasUnsavedChanges = true;
+            updateButtonStates();
+        }
+
+        function updateQuarantine(value) {
+            workingConfig.quarantineFolder = value;
+            hasUnsavedChanges = true;
+            updateButtonStates();
+        }
+
+        function updateNightBatchWindow(type, value) {
+            if (isInitializing) return;
+            
+            if (!workingConfig.destinations) {
+                workingConfig.destinations = {};
+            }
+            
+            if (!workingConfig.destinations.Night) {
+                workingConfig.destinations.Night = { ProcessingWindow: { Start: "20:00", End: "06:00" } };
+            }
+            if (!workingConfig.destinations.Night.ProcessingWindow) {
+                workingConfig.destinations.Night.ProcessingWindow = { Start: "20:00", End: "06:00" };
+            }
+            
+            if (type === 'start') {
+                workingConfig.destinations.Night.ProcessingWindow.Start = value;
+            } else if (type === 'end') {
+                workingConfig.destinations.Night.ProcessingWindow.End = value;
+            }
+            
+            hasUnsavedChanges = true;
+            updateButtonStates();
+        }
+
+        function applyChanges() {
+                // Sammle alle aktuellen Formate aus der UI
+                const formats = {};
+                
+                // Alle Format-Container finden und Formate sammeln
+                const formatContainers = document.querySelectorAll('[id$="Formats"]');
+                formatContainers.forEach(container => {
+                    const containerId = container.id;
+                    const category = containerId.replace('Formats', '').toUpperCase();
+                    
+                    if (category === 'MAM' || category === 'BOX' || category === 'SYSTEM') {
+                        formats[category] = [];
+                    } else {
+                        // Custom destination - extrahiere Name aus ID
+                        const customCategory = containerId.replace('formats', '').toUpperCase();
+                        formats[customCategory] = [];
+                    }
+                    
+                    const tags = container.querySelectorAll('.format-tag');
+                    tags.forEach(tag => {
+                        const format = tag.dataset.format;
+                        const tagCategory = tag.dataset.category;
+                        if (!formats[tagCategory]) {
+                            formats[tagCategory] = [];
+                        }
+                        formats[tagCategory].push(format);
+                    });
+                });
+                
+                // Stelle sicher, dass Standard-Kategorien existieren
+                if (!formats.MAM) formats.MAM = [];
+                if (!formats.BOX) formats.BOX = [];
+                if (!formats.SYSTEM) formats.SYSTEM = [];
+                
+                // Formate zur Konfiguration hinzufügen
+                workingConfig.Formats = formats;            fetch(apiBaseUrl + '/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(workingConfig)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    originalConfig = JSON.parse(JSON.stringify(workingConfig));
+                    config = JSON.parse(JSON.stringify(workingConfig));
+                    hasUnsavedChanges = false;
+                    updateButtonStates();
+                    alert('Konfiguration erfolgreich gespeichert!');
+                } else {
+                    alert('Fehler beim Speichern: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Fehler beim Speichern der Konfiguration: ' + error.message);
+            });
+        }
+
+        function resetChanges() {
+            if (confirm('Alle Änderungen verwerfen und zur letzten gespeicherten Version zurückkehren?')) {
+                workingConfig = JSON.parse(JSON.stringify(originalConfig));
+                hasUnsavedChanges = false;
+                updateUI();
+                // Formate neu laden
+                loadTargetFoldersAndFormats();
+            }
+        }
+
+
+        
+        function browseFolder(elementId) {
+            if (window.electronAPI) {
+                // Use Electron native dialog
+                window.electronAPI.selectFolder().then(path => {
+                    if (path) {
+                        document.getElementById(elementId).value = path;
+                        // Trigger the oninput event manually
+                        document.getElementById(elementId).dispatchEvent(new Event('input'));
+                    }
+                });
+            } else {
+                // Fallback to prompt for web version
+                const currentPath = document.getElementById(elementId).value;
+                const newPath = prompt('Ordner-Pfad eingeben:', currentPath || 'C:\\Temp');
+
+                if (newPath && newPath.trim()) {
+                    document.getElementById(elementId).value = newPath.trim();
+                    // Trigger the oninput event manually
+                    document.getElementById(elementId).dispatchEvent(new Event('input'));
+                }
+            }
+        }
+        
+
+        
+
+        
+        function loadNightBatchStatus() {
+            fetch(apiBaseUrl + '/night-batch/status')
+                .then(response => response.json())
+                .then(status => {
+                    updateNightBatchDisplay(status);
+                })
+                .catch(error => console.error('Fehler beim Laden des Nachtverarbeitungs-Status:', error));
+        }
+        
+        function updateNightBatchDisplay(status) {
+            const container = document.getElementById('nightBatchStatus');
+            const startBtn = document.getElementById('startNightBatchBtn');
+            
+            let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
+            
+            // Verarbeitungsfenster Status
+            const windowStatus = status.processingWindow.isActive ? 
+                '<span style="color: #27ae60;">🟢 Aktiv</span>' : 
+                '<span style="color: #f39c12;">🟡 Inaktiv</span>';
+            
+            html += `
+                <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                    <div style="font-weight: bold;">Verarbeitungsfenster</div>
+                    <div>${status.processingWindow.start} - ${status.processingWindow.end}</div>
+                    <div>${windowStatus}</div>
+                </div>
+            `;
+            
+            // Night-Ordner Status
+            const folderStatus = status.nightFolder.exists ? 
+                '<span style="color: #27ae60;">✅ Verfügbar</span>' : 
+                '<span style="color: #e74c3c;">❌ Nicht gefunden</span>';
+            
+            html += `
+                <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                    <div style="font-weight: bold;">Night-Ordner</div>
+                    <div>${status.nightFolder.fileCount} Dateien</div>
+                    <div>${folderStatus}</div>
+                </div>
+            `;
+            
+            html += '</div>';
+            
+            // Letzte Verarbeitung
+            if (status.lastRun) {
+                const lastRunTime = new Date(status.lastRun.timestamp).toLocaleString('de-DE');
+                html += `
+                    <div style="padding: 10px; background: #e8f4fd; border-radius: 4px; margin-bottom: 10px;">
+                        <div style="font-weight: bold;">Letzte Verarbeitung: ${lastRunTime}</div>
+                        <div>${status.lastRun.filesProcessed} Dateien in ${status.lastRun.duration}</div>
+                        <div>Status: <span style="color: ${status.lastRun.status === 'success' ? '#27ae60' : '#e74c3c'};">${status.lastRun.status}</span></div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
+            
+            // Start-Button anzeigen/verstecken
+            if (status.canStartManually && status.nightFolder.fileCount > 0) {
+                startBtn.style.display = 'inline-block';
+            } else {
+                startBtn.style.display = 'none';
+            }
+        }
+        
+        function startNightBatch() {
+            if (!confirm('Nachtverarbeitung manuell starten? Dies kann einige Zeit in Anspruch nehmen.')) {
+                return;
+            }
+            
+            const btn = document.getElementById('startNightBatchBtn');
+            btn.disabled = true;
+            btn.textContent = '🔄 Verarbeitung läuft...';
+            
+            fetch(apiBaseUrl + '/night-batch/start', { method: 'POST' })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        alert('Nachtverarbeitung wurde gestartet!');
+                        addActivityToLog('Nachtverarbeitung gestartet', 'Manueller Start über Dashboard', new Date().toISOString());
+                        loadNightBatchStatus();
+                    } else {
+                        alert('Fehler beim Starten: ' + result.error);
+                    }
+                })
+                .catch(error => {
+                    alert('Fehler beim Starten der Nachtverarbeitung: ' + error.message);
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = '🌙 Nachtverarbeitung starten';
+                });
+        }
+
+        // Format-Konfiguration Funktionen
+        function loadTargetFoldersAndFormats() {
+            console.log('loadTargetFoldersAndFormats called');
+            
+            // Verwende workingConfig wenn verfügbar, sonst config, sonst defaults
+            const currentConfig = workingConfig && Object.keys(workingConfig).length > 0 ? workingConfig : config;
+            
+            const formats = (currentConfig && currentConfig.Formats) ? currentConfig.Formats : {
+                MAM: [".mxf", ".mp4", ".mov", ".mts", ".m2ts", ".ts", ".m4v", ".mkv", ".webm", ".mpg", ".mpeg", ".avi", ".3gp", ".divx", ".dv", ".flv", ".m2t", ".vob", ".wmv"],
+                BOX: [".wav", ".aif", ".aiff", ".mp3", ".flac", ".m4a", ".ogg", ".pdf", ".doc", ".docx", ".txt", ".xlsx", ".pptx", ".jpg", ".jpeg", ".png", ".tiff", ".psd", ".raw", ".dng", ".aep", ".prproj", ".drp", ".edl", ".aaf", ".omf"],
+                SYSTEM: [".tmp", ".log", ".cache", ".db", ".ini", ".sys", ".bim", ".cpi", ".pek", ".xmp", ".xml"]
+            };
+            
+            console.log('Using config:', currentConfig);
+            console.log('Using formats:', formats);
+            
+            displayTargetFoldersAndFormats(currentConfig, formats);
+        }
+        
+        function addCustomDestination() {
+            showCustomDestinationDialog();
+        }
+        
+        function showCustomDestinationDialog() {
+            // Custom Dialog erstellen
+            const dialogOverlay = document.createElement('div');
+            dialogOverlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            const dialog = document.createElement('div');
+            dialog.style.cssText = `
+                background: white;
+                border-radius: 8px;
+                padding: 20px;
+                min-width: 400px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            `;
+            
+            dialog.innerHTML = `
+                <h3 style="margin: 0 0 15px 0; color: #3498db;">Neuen Zielordner hinzufügen</h3>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Name des Zielordners:</label>
+                    <input type="text" id="customDestinationName" value="CUSTOM" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                    <small style="color: #666; display: block; margin-top: 5px;">Nur Buchstaben, Zahlen und Unterstriche erlaubt<br>Der Zielordner-Pfad kann nach dem Erstellen konfiguriert werden</small>
+                </div>
+                <div style="text-align: right;">
+                    <button onclick="cancelCustomDestinationDialog()" style="background: #95a5a6; color: white; border: none; padding: 8px 16px; border-radius: 4px; margin-right: 10px; cursor: pointer;">Abbrechen</button>
+                    <button onclick="confirmCustomDestinationDialog()" style="background: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Hinzufügen</button>
+                </div>
+            `;
+            
+            dialogOverlay.appendChild(dialog);
+            document.body.appendChild(dialogOverlay);
+            
+            // Focus auf Name-Feld
+            setTimeout(() => {
+                const nameInput = document.getElementById('customDestinationName');
+                if (nameInput) {
+                    nameInput.focus();
+                    nameInput.select();
+                }
+            }, 100);
+            
+            // Kein Auto-Update mehr nötig, da nur Name-Feld vorhanden
+        }
+        
+        function cancelCustomDestinationDialog() {
+            const overlay = document.querySelector('div[style*="position: fixed"][style*="z-index: 10000"]');
+            if (overlay) {
+                overlay.remove();
+            }
+        }
+        
+        function confirmCustomDestinationDialog() {
+            try {
+                const nameInput = document.getElementById('customDestinationName');
+                
+                if (!nameInput) {
+                    alert('Fehler: Eingabefeld nicht gefunden');
+                    return;
+                }
+                
+                const name = nameInput.value.trim();
+                
+                if (!name) {
+                    alert('Bitte geben Sie einen Namen ein');
+                    nameInput.focus();
+                    return;
+                }
+                
+                const cleanName = name.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+                
+                // Standard-Pfad basierend auf dem Namen generieren
+                const path = `C:\\Temp\\${cleanName}`;
+                
+                // Stelle sicher, dass workingConfig vollständig initialisiert ist
+                if (!workingConfig || Object.keys(workingConfig).length === 0) {
+                    workingConfig = config ? JSON.parse(JSON.stringify(config)) : {
+                        destinations: {},
+                        Formats: {
+                            MAM: [".mxf", ".mp4", ".mov", ".mts", ".m2ts", ".ts", ".m4v", ".mkv", ".webm", ".mpg", ".mpeg", ".avi", ".3gp", ".divx", ".dv", ".flv", ".m2t", ".vob", ".wmv"],
+                            BOX: [".wav", ".aif", ".aiff", ".mp3", ".flac", ".m4a", ".ogg", ".pdf", ".doc", ".docx", ".txt", ".xlsx", ".pptx", ".jpg", ".jpeg", ".png", ".tiff", ".psd", ".raw", ".dng", ".aep", ".prproj", ".drp", ".edl", ".aaf", ".omf"],
+                            SYSTEM: [".tmp", ".log", ".cache", ".db", ".ini", ".sys", ".bim", ".cpi", ".pek", ".xmp", ".xml"]
+                        }
+                    };
+                }
+                
+                if (!workingConfig.destinations) {
+                    workingConfig.destinations = {};
+                }
+                if (!workingConfig.Formats) {
+                    workingConfig.Formats = {
+                        MAM: [".mxf", ".mp4", ".mov", ".mts", ".m2ts", ".ts", ".m4v", ".mkv", ".webm", ".mpg", ".mpeg", ".avi", ".3gp", ".divx", ".dv", ".flv", ".m2t", ".vob", ".wmv"],
+                        BOX: [".wav", ".aif", ".aiff", ".mp3", ".flac", ".m4a", ".ogg", ".pdf", ".doc", ".docx", ".txt", ".xlsx", ".pptx", ".jpg", ".jpeg", ".png", ".tiff", ".psd", ".raw", ".dng", ".aep", ".prproj", ".drp", ".edl", ".aaf", ".omf"],
+                        SYSTEM: [".tmp", ".log", ".cache", ".db", ".ini", ".sys", ".bim", ".cpi", ".pek", ".xmp", ".xml"]
+                    };
+                }
+                
+                // Prüfen ob Name bereits existiert
+                const currentFormats = workingConfig.Formats || {};
+                if (currentFormats[cleanName] || ['MAM', 'BOX', 'SYSTEM', 'Quarantine'].includes(cleanName)) {
+                    alert(`Ein Zielordner mit dem Namen "${cleanName}" existiert bereits oder ist reserviert.`);
+                    nameInput.focus();
+                    nameInput.select();
+                    return;
+                }
+                
+                // Neue Destination hinzufügen
+                workingConfig.destinations[cleanName] = {
+                    Path: path,
+                    Enabled: true,
+                    PreserveFolderStructure: false
+                };
+                
+                workingConfig.Formats[cleanName] = [];
+                
+                hasUnsavedChanges = true;
+                updateButtonStates();
+                
+                console.log('Custom destination added successfully:', {
+                    name: cleanName,
+                    path: path,
+                    destinations: workingConfig.destinations,
+                    formats: workingConfig.Formats
+                });
+                
+                // Dialog schließen
+                cancelCustomDestinationDialog();
+                
+                // UI neu laden mit Debug-Ausgabe
+                console.log('Reloading UI with updated config...');
+                loadTargetFoldersAndFormats();
+                
+                // Focus auf das neue Format-Eingabefeld setzen
+                setTimeout(() => {
+                    const newInput = document.getElementById(`new${cleanName}Format`);
+                    if (newInput) {
+                        newInput.focus();
+                        console.log('Focused on new input field:', `new${cleanName}Format`);
+                    } else {
+                        console.log('New input field not found:', `new${cleanName}Format`);
+                        console.log('Available inputs:', document.querySelectorAll('[id^="new"][id$="Format"]'));
+                    }
+                }, 300);
+                
+            } catch (error) {
+                alert('Fehler beim Hinzufügen des Zielordners: ' + error.message);
+            }
+        }
+        
+        function removeCustomDestination(name) {
+            try {
+                if (['MAM', 'BOX', 'SYSTEM', 'Quarantine'].includes(name)) {
+                    alert('Standard-Zielordner können nicht entfernt werden.');
+                    return;
+                }
+                
+                if (!confirm(`Zielordner "${name}" wirklich entfernen?\n\nDies entfernt den Ordner und alle zugehörigen Formateinstellungen.`)) {
+                    return;
+                }
+                
+                // Stelle sicher, dass workingConfig existiert
+                if (!workingConfig) {
+                    workingConfig = JSON.parse(JSON.stringify(config || {}));
+                }
+                
+                // Aus workingConfig entfernen
+                if (workingConfig.destinations && workingConfig.destinations[name]) {
+                    delete workingConfig.destinations[name];
+                }
+                if (workingConfig.Formats && workingConfig.Formats[name]) {
+                    delete workingConfig.Formats[name];
+                }
+                
+                hasUnsavedChanges = true;
+                updateButtonStates();
+                
+                // UI neu laden
+                loadTargetFoldersAndFormats();
+                
+                console.log('Custom destination removed:', name);
+                
+            } catch (error) {
+                console.error('Error removing custom destination:', error);
+                alert('Fehler beim Entfernen des Zielordners: ' + error.message);
+            }
+        }
+
+        function displayTargetFoldersAndFormats(config, formats) {
+            console.log('displayTargetFoldersAndFormats called with:', { config, formats });
+            const container = document.getElementById('targetFoldersConfig');
+            
+            let html = '<div style="display: grid; gap: 20px;">';
+            
+            // Funktion zum Rendern eines Zielordners
+            function renderDestination(name, displayName, color, bgColor, icon, isRemovable = false) {
+                const pathField = name.toLowerCase() === 'quarantine' ? 'quarantinePath' : `${name.toLowerCase()}Path`;
+                const path = name === 'Quarantine' ? 
+                    (config?.destinations?.Quarantine?.Path || 'C:\\Temp\\Quarantine') :
+                    (config?.destinations?.[name]?.Path || `C:\\Temp\\${name}`);
+                
+                html += `<div style="border: 2px solid ${color}; border-radius: 8px; padding: 15px; background: ${bgColor}; position: relative;">`;
+                
+                if (isRemovable) {
+                    html += `<button onclick="removeCustomDestination('${name}')" style="position: absolute; top: 10px; right: 10px; background: #e74c3c; color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer; font-size: 14px; font-weight: bold;">×</button>`;
+                }
+                
+                html += `<h3 style="margin: 0 0 15px 0; color: ${color};">${icon} ${displayName}</h3>`;
+                
+                if (name !== 'SYSTEM') {
+                    html += '<div style="margin-bottom: 15px;">';
+                    html += '<strong>Zielordner:</strong><br>';
+                    const onInputHandler = name === 'Quarantine' ? 'updateQuarantine(this.value)' : `updateDestination('${name}', 'Path', this.value)`;
+                    html += `<input type="text" id="${pathField}" value="${path}" placeholder="Pfad zum ${displayName} Ordner" oninput="${onInputHandler}" style="width: 250px; margin-right: 5px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">`;
+                    html += `<button class="btn" onclick="browseFolder('${pathField}')">Ordner wählen</button>`;
+                    html += '</div>';
+                }
+                
+                if (name !== 'Quarantine') {
+                    html += '<div>';
+                    html += `<strong>${name === 'SYSTEM' ? 'Diese Dateiformate werden automatisch ignoriert:' : 'Unterstützte Dateiformate:'}</strong><br>`;
+                    html += `<div id="${name.toLowerCase()}Formats" style="display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0;">`;
+                    if (formats[name]) {
+                        formats[name].forEach(format => {
+                            html += `<span class="format-tag" data-category="${name}" data-format="${format}">${format} <span class="remove-format" onclick="removeFormat('${name}', '${format}')">×</span></span>`;
+                        });
+                    }
+                    html += '</div>';
+                    const placeholder = name === 'MAM' ? '.avi' : name === 'BOX' ? '.xlsx' : name === 'SYSTEM' ? '.tmp' : '.ext';
+                    html += `<input type="text" id="new${name}Format" placeholder="Neues Format (z.B. ${placeholder})" style="width: 150px; margin-right: 5px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;">`;
+                    html += `<button class="btn" id="add${name}Btn" onclick="addFormat('${name}')">Hinzufügen</button>`;
+                    html += '</div>';
+                } else {
+                    html += '<small style="color: #666;">Dateien mit unbekannten Formaten oder bei Fehlern landen hier</small>';
+                }
+                
+                html += '</div>';
+            }
+            
+            // Standard-Zielordner rendern
+            renderDestination('MAM', 'MAM (Medien-Archive)', '#e74c3c', '#fdf2f2', '📁');
+            renderDestination('BOX', 'BOX (Dokumente)', '#f39c12', '#fefbf3', '📁');
+            
+            // Benutzerdefinierte Zielordner rendern
+            console.log('Checking for custom destinations in formats:', formats);
+            if (formats) {
+                const customKeys = Object.keys(formats).filter(key => !['MAM', 'BOX', 'SYSTEM'].includes(key));
+                console.log('Found custom destination keys:', customKeys);
+                
+                customKeys.forEach(key => {
+                    console.log('Rendering custom destination:', key);
+                    const colors = ['#9b59b6', '#1abc9c', '#34495e', '#e67e22', '#2ecc71'];
+                    const colorIndex = key.length % colors.length;
+                    const color = colors[colorIndex];
+                    const bgColor = color + '20'; // 20% opacity
+                    renderDestination(key, key, color, bgColor, '📁', true);
+                });
+            } else {
+                console.log('No formats object available');
+            }
+            
+            // SYSTEM Formate
+            renderDestination('SYSTEM', 'SYSTEM-Formate (werden ignoriert)', '#95a5a6', '#f8f9fa', '🚫');
+            
+            // Quarantäne
+            renderDestination('Quarantine', 'Quarantäne', '#e67e22', '#fdf4e3', '⚠️');
+            
+            html += '</div>';
+            
+            // Button zum Hinzufügen neuer Zielordner
+            html += '<div style="text-align: center; margin-top: 20px; padding: 15px; border: 2px dashed #3498db; border-radius: 8px; background: #f8fbff;">';
+            html += '<button class="btn" onclick="addCustomDestination()" style="background: #3498db; color: white; font-size: 16px; padding: 10px 20px;">➕ Neuen Zielordner hinzufügen</button>';
+            html += '<br><small style="color: #666; margin-top: 10px; display: block;">Erstellen Sie eigene Zielordner mit spezifischen Dateiformaten</small>';
+            html += '</div>';
+            
+            container.innerHTML = html;
+            
+            // Event-Handler für die Eingabefelder sicherstellen
+            setTimeout(function() {
+                setupFormatInputHandlers();
+                // Zusätzlich sicherstellen, dass alle Input-Felder aktiviert sind
+                const inputs = ['newMAMFormat', 'newBOXFormat', 'newSYSTEMFormat'];
+                inputs.forEach(inputId => {
+                    const input = document.getElementById(inputId);
+                    if (input) {
+                        input.disabled = false;
+                        input.style.pointerEvents = 'auto';
+                        input.style.opacity = '1';
+                        input.style.cursor = 'text';
+                    }
+                });
+            }, 10);
+        }
+
+        function setupFormatInputHandlers() {
+            // Event-Handler für Enter-Taste in Eingabefeldern - alle Format-Eingabefelder finden
+            const formatInputs = document.querySelectorAll('[id^="new"][id$="Format"]');
+            formatInputs.forEach(input => {
+                if (input && !input.hasAttribute('data-handler-registered')) {
+                    // Markiere als registriert
+                    input.setAttribute('data-handler-registered', 'true');
+                    
+                    // Füge Event-Handler hinzu
+                    input.addEventListener('keypress', function(event) {
+                        if (event.key === 'Enter') {
+                            event.preventDefault();
+                            const category = input.id.replace('new', '').replace('Format', '');
+                            addFormat(category);
+                        }
+                    });
+                    
+                    // Stelle sicher, dass das Feld funktionsfähig ist
+                    input.disabled = false;
+                    input.style.pointerEvents = 'auto';
+                    input.style.opacity = '1';
+                }
+            });
+        }
+
+        function showErrorMessage(message) {
+            // Erstelle eine temporäre Fehlermeldung
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #e74c3c;
+                color: white;
+                padding: 10px 15px;
+                border-radius: 4px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                z-index: 10000;
+                font-size: 14px;
+                max-width: 300px;
+            `;
+            errorDiv.textContent = message;
+            document.body.appendChild(errorDiv);
+            
+            // Entferne die Meldung nach 3 Sekunden
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.remove();
+                }
+            }, 3000);
+        }
+        function addFormat(category) {
+            try {
+                const inputId = `new${category}Format`;
+                const input = document.getElementById(inputId);
+                if (!input) {
+                    console.error(`Input field ${inputId} not found`);
+                    return;
+                }
+                
+                let format = input.value.trim();
+                
+                if (!format) {
+                    alert('Bitte geben Sie ein Format ein');
+                    input.focus();
+                    return;
+                }
+                
+                // Stelle sicher, dass das Format mit einem Punkt beginnt
+                if (!format.startsWith('.')) {
+                    format = '.' + format;
+                }
+                
+                // Prüfe ob Format bereits in irgendeiner Kategorie existiert
+                const allContainers = ['mamFormats', 'boxFormats', 'systemFormats'];
+                let formatExists = false;
+                let existingCategory = '';
+                
+                for (const containerId of allContainers) {
+                    const container = document.getElementById(containerId);
+                    if (container) {
+                        const existingTags = container.querySelectorAll('.format-tag');
+                        for (let tag of existingTags) {
+                            if (tag.dataset.format === format) {
+                                formatExists = true;
+                                if (containerId === 'mamFormats') existingCategory = 'MAM';
+                                else if (containerId === 'boxFormats') existingCategory = 'BOX';
+                                else if (containerId === 'systemFormats') existingCategory = 'SYSTEM';
+                                break;
+                            }
+                        }
+                        if (formatExists) break;
+                    }
+                }
+                
+                if (formatExists) {
+                    // Zeige eine kurze visuelle Rückmeldung
+                    input.style.borderColor = '#e74c3c';
+                    input.style.backgroundColor = '#ffeaea';
+                    input.value = '';
+                    input.placeholder = `Format bereits in ${existingCategory} vorhanden...`;
+                    
+                    // Setze nach 2 Sekunden zurück
+                    setTimeout(() => {
+                        input.style.borderColor = '#ddd';
+                        input.style.backgroundColor = 'white';
+                        input.placeholder = input.id.replace('new', '').replace('Format', '').toLowerCase() === 'mam' ? 
+                            'Neues Format (z.B. .avi)' : 
+                            input.id.replace('new', '').replace('Format', '').toLowerCase() === 'box' ? 
+                            'Neues Format (z.B. .xlsx)' : 
+                            'Neues Format (z.B. .tmp)';
+                        input.focus();
+                    }, 2000);
+                    return;
+                }
+                
+                // Neues Tag hinzufügen
+                const targetContainer = document.getElementById(`${category.toLowerCase()}Formats`);
+                if (!targetContainer) {
+                    console.error(`Ziel-Container ${category.toLowerCase()}Formats nicht gefunden`);
+                    return;
+                }
+                
+                const tagHtml = `<span class="format-tag" data-category="${category}" data-format="${format}">${format} <span class="remove-format" onclick="removeFormat('${category}', '${format}')">×</span></span>`;
+                targetContainer.insertAdjacentHTML('beforeend', tagHtml);
+                
+                // Input leeren und Fokus setzen
+                input.value = '';
+                input.focus();
+                
+            } catch (error) {
+                console.error('Fehler in addFormat:', error);
+                alert('Fehler beim Hinzufügen des Formats: ' + error.message);
+            }
+        }
+
+        function removeFormat(category, format) {
+            try {
+                // Erstelle eine benutzerdefinierte Bestätigung ohne blockierenden Dialog
+                const confirmDiv = document.createElement('div');
+                confirmDiv.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: white;
+                    border: 2px solid #e74c3c;
+                    border-radius: 8px;
+                    padding: 20px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    z-index: 10001;
+                    text-align: center;
+                    max-width: 300px;
+                `;
+                confirmDiv.innerHTML = `
+                    <div style="margin-bottom: 15px; color: #333;">Format "${format}" wirklich entfernen?</div>
+                    <button id="confirmDelete" style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; margin-right: 10px; cursor: pointer;">Entfernen</button>
+                    <button id="cancelDelete" style="background: #95a5a6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Abbrechen</button>
+                `;
+                
+                document.body.appendChild(confirmDiv);
+                
+                // Event-Handler für die Buttons
+                document.getElementById('confirmDelete').onclick = function() {
+                    // Format tatsächlich entfernen
+                    const container = document.getElementById(`${category.toLowerCase()}Formats`);
+                    if (container) {
+                        const tags = container.querySelectorAll('.format-tag');
+                        tags.forEach(tag => {
+                            if (tag.dataset.format === format) {
+                                tag.remove();
+                            }
+                        });
+                    }
+                    confirmDiv.remove();
+                };
+                
+                document.getElementById('cancelDelete').onclick = function() {
+                    confirmDiv.remove();
+                };
+                
+            } catch (error) {
+                console.error('Fehler in removeFormat:', error);
+                // Fallback zu alert bei kritischen Fehlern
+                if (confirm(`Format "${format}" wirklich entfernen?`)) {
+                    const container = document.getElementById(`${category.toLowerCase()}Formats`);
+                    if (container) {
+                        const tags = container.querySelectorAll('.format-tag');
+                        tags.forEach(tag => {
+                            if (tag.dataset.format === format) {
+                                tag.remove();
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        function saveFormatConfig() {
+            // Prüfe ob Format-Container existieren und gültig sind
+            const mamContainer = document.getElementById('mamFormats');
+            const boxContainer = document.getElementById('boxFormats');
+            const systemContainer = document.getElementById('systemFormats');
+            
+            console.log('Container Status:', {
+                mamContainer: mamContainer ? 'exists' : 'null',
+                boxContainer: boxContainer ? 'exists' : 'null',
+                systemContainer: systemContainer ? 'exists' : 'null'
+            });
+            
+            if (!mamContainer || !boxContainer || !systemContainer) {
+                alert('Format-Konfiguration wurde noch nicht geladen. Bitte warten Sie einen Moment.');
+                return;
+            }
+            
+            // Zusätzliche Sicherheit: Prüfe ob die Elemente tatsächlich DOM-Elemente sind
+            if (typeof mamContainer.querySelectorAll !== 'function' ||
+                typeof boxContainer.querySelectorAll !== 'function' ||
+                typeof systemContainer.querySelectorAll !== 'function') {
+                alert('Format-Konfiguration ist beschädigt. Bitte laden Sie die Seite neu.');
+                return;
+            }
+            
+            // Sammle alle Formate aus der UI
+            const formats = {
+                MAM: [],
+                BOX: [],
+                SYSTEM: []
+            };
+            
+            // MAM Formate sammeln
+            const mamTags = mamContainer.querySelectorAll('.format-tag');
+            mamTags.forEach(tag => {
+                formats.MAM.push(tag.dataset.format);
+            });
+            
+            // BOX Formate sammeln
+            const boxTags = boxContainer.querySelectorAll('.format-tag');
+            boxTags.forEach(tag => {
+                formats.BOX.push(tag.dataset.format);
+            });
+            
+            // SYSTEM Formate sammeln
+            const systemTags = systemContainer.querySelectorAll('.format-tag');
+            systemTags.forEach(tag => {
+                formats.SYSTEM.push(tag.dataset.format);
+            });
+            
+            // An API senden
+            fetch(apiBaseUrl + '/formats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ formats: formats })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Format-Konfiguration erfolgreich gespeichert!');
+                    // Format-Konfiguration erfolgreich gespeichert
+                } else {
+                    alert('Fehler beim Speichern: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Fehler beim Speichern der Format-Konfiguration: ' + error.message);
+            });
+        }
+
+        // CSS für Format-Tags hinzufügen
+        const style = document.createElement('style');
+        style.textContent = `
+            .format-tag {
+                display: inline-flex;
+                align-items: center;
+                background: #3498db;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 12px;
+                margin: 2px;
+            }
+            .format-tag[data-category="MAM"] { background: #e74c3c; }
+            .format-tag[data-category="BOX"] { background: #f39c12; }
+            .format-tag[data-category="SYSTEM"] { background: #95a5a6; }
+            .remove-format {
+                margin-left: 4px;
+                cursor: pointer;
+                font-weight: bold;
+                color: rgba(255,255,255,0.8);
+            }
+            .remove-format:hover {
+                color: white;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Konfiguration beim Laden laden
+        let config = {};
+        let originalConfig = {};
+        let workingConfig = {};
+        let isInitializing = false;
+        let hasUnsavedChanges = false;
+
+        window.onload = function() {
+            console.log('Window loaded, initializing...');
+            
+            // Initialisiere globale Variablen
+            if (!config) config = {};
+            if (!workingConfig) workingConfig = {};
+            if (!originalConfig) originalConfig = {};
+            
+            // Standardwerte für Nachtverarbeitung setzen
+            setDefaultNightBatchTimes();
+            loadConfig();
+            loadNightBatchStatus();
+            loadTargetFoldersAndFormats();
+            // Event-Handler für Format-Eingaben einrichten
+            setTimeout(setupFormatInputHandlers, 1000); // Kurze Verzögerung um sicherzustellen, dass DOM bereit ist
+            // Automatische Aktualisierung alle 60 Sekunden
+            setInterval(loadNightBatchStatus, 60000); // Nachtverarbeitung alle 60 Sekunden
+            
+            console.log('Initialization complete');
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Watch Folder Dashboard</title>
+    <style>
+        body { font-family: Arial; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background: white; padding: 20px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background: #2c3e50; color: white; padding: 20px; border-radius: 8px; text-align: center; }
+        .status { background: #27ae60; color: white; padding: 15px; border-radius: 4px; margin: 10px 0; }
+        .config-item { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 4px; }
+        .btn { padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        .btn-primary { background: #27ae60 !important; }
+        .btn-warning { background: #f39c12 !important; }
+        .btn-secondary { background: #95a5a6 !important; cursor: not-allowed !important; opacity: 0.6 !important; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; width: 300px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Watch Folder Dashboard</h1>
+            <p>Konfiguration und Überwachung</p>
+        </div>
+
+        <div class="card">
+            <h2>Performance-Metriken</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #3498db;" id="cpuUsage">0%</div>
+                    <div style="color: #666;">CPU Auslastung</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #27ae60;" id="memoryUsage">0 MB</div>
+                    <div style="color: #666;">Freier RAM</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #f39c12;" id="processingRate">0/min</div>
+                    <div style="color: #666;">Verarbeitungsrate</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+                    <div style="font-size: 24px; font-weight: bold; color: #e74c3c;" id="errorRate">0%</div>
+                    <div style="color: #666;">Fehlerrate</div>
+                </div>
+            </div>
+            <div style="margin-top: 15px; padding: 10px; background: #ecf0f1; border-radius: 4px;">
+                <strong>Uptime:</strong> <span id="uptime">0s</span> |
+                <strong>Queue-Größe:</strong> <span id="queueSize">0</span> |
+                <strong>Verarbeitete Dateien:</strong> <span id="filesProcessed">0</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Watch Folder Konfiguration</h2>
+            <div class="config-item">
+                <strong>Watch Folder:</strong><br>
+                <input type="text" id="watchPath" value="C:\Temp\Incoming" placeholder="Pfad zum Watch Folder" oninput="updateWatchFolder(0, 'Path', this.value)">
+                <button class="btn" onclick="browseFolder('watchPath')">Ordner wählen</button>
+            </div>
+            
+            <div class="config-item">
+                <strong>Karenzzeit (in Sekunden):</strong><br>
+                <input type="number" id="gracePeriod" value="30" placeholder="Sekunden" oninput="updateWatchFolder(0, 'GracePeriod', parseInt(this.value))">
+            </div>
+        </div>        <div class="card">
+            <h2>Zielordner</h2>
+            <div class="config-item">
+                <strong>MAM:</strong><br>
+                <input type="text" id="mamPath" value="C:\Temp\MAM" placeholder="Pfad zum MAM Ordner" oninput="updateDestination('MAM', 'Path', this.value)">
+                <button class="btn" onclick="browseFolder('mamPath')">Ordner wählen</button>
+            </div>
+            <div class="config-item">
+                <strong>BOX:</strong><br>
+                <input type="text" id="boxPath" value="C:\Temp\BOX" placeholder="Pfad zum BOX Ordner" oninput="updateDestination('BOX', 'Path', this.value)">
+                <button class="btn" onclick="browseFolder('boxPath')">Ordner wählen</button>
+            </div>
+            <div class="config-item">
+                <strong>Quarantäne:</strong><br>
+                <input type="text" id="quarantinePath" value="C:\Temp\Quarantine" placeholder="Pfad zum Quarantäne Ordner" oninput="updateQuarantine(this.value)">
+                <button class="btn" onclick="browseFolder('quarantinePath')">Ordner wählen</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Nachtverarbeitung</h2>
+            <div id="nightBatchStatus">
+                <!-- Status wird hier geladen -->
+            </div>
+            <div style="margin-top: 15px;">
+                <button id="startNightBatchBtn" class="btn btn-success" onclick="startNightBatch()" style="display: none;">
+                    🌙 Nachtverarbeitung starten
+                </button>
+            </div>
+            <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                <h4 style="margin: 0 0 10px 0;">Zeitfenster konfigurieren:</h4>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label>Start: <input type="time" id="nightStartTime" oninput="updateNightBatchWindow('start', this.value)"></label>
+                    <label>Ende: <input type="time" id="nightEndTime" oninput="updateNightBatchWindow('end', this.value)"></label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Aktivitäten & Fehler</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div id="activitiesList">
+                    <h4 style="margin: 0 0 10px 0; color: #27ae60;">Aktivitäten</h4>
+                    <p style="color: #666; font-style: italic;">Lade Aktivitäten...</p>
+                </div>
+                <div id="errorsList">
+                    <h4 style="margin: 0 0 10px 0; color: #e74c3c;">Fehler</h4>
+                    <p style="color: #666; font-style: italic;">Lade Fehler...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Aktionen</h2>
+            <button class="btn" onclick="testFile()">Test-Datei erstellen</button>
+            <button class="btn" onclick="openFolder()">Watch-Ordner öffnen</button>
+        </div>
+
+        <div class="card">
+            <h2>Konfiguration speichern</h2>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="applyChangesBtn" class="btn btn-secondary" onclick="applyChanges()" disabled>
+                    ✅ Übernehmen
+                </button>
+                <button id="resetChangesBtn" class="btn btn-secondary" onclick="resetChanges()" disabled>
+                    🔄 Zurücksetzen
+                </button>
+            </div>
+            <p style="text-align: center; color: #666; font-size: 14px; margin-top: 10px;">
+                Änderungen werden erst nach Klick auf "Übernehmen" gespeichert
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let config = {};
+        let originalConfig = {};
+        let workingConfig = {};
+        let isInitializing = false;
+        let hasUnsavedChanges = false;
+
+        // Konfiguration beim Laden laden
+        window.onload = function() {
+            // Standardwerte für Nachtverarbeitung setzen
+            setDefaultNightBatchTimes();
+            loadConfig();
+            loadActivityLog();
+            loadPerformanceMetrics();
+            loadNightBatchStatus();
+            // Automatische Aktualisierung alle 30 Sekunden
+            setInterval(loadActivityLog, 30000);
+            setInterval(loadPerformanceMetrics, 10000); // Performance alle 10 Sekunden
+            setInterval(loadNightBatchStatus, 60000); // Nachtverarbeitung alle 60 Sekunden
+        };
+
+        function setDefaultNightBatchTimes() {
+            isInitializing = true;
+            
+            // Standardwerte für Nachtverarbeitung setzen
+            document.getElementById('nightStartTime').value = "20:00";
+            document.getElementById('nightEndTime').value = "06:00";
+            
+            // Standardwerte auch in workingConfig und originalConfig setzen
+            if (!workingConfig.destinations) {
+                workingConfig.destinations = {};
+            }
+            if (!workingConfig.destinations.Night) {
+                workingConfig.destinations.Night = { ProcessingWindow: { Start: "20:00", End: "06:00" } };
+            }
+            if (!workingConfig.destinations.Night.ProcessingWindow) {
+                workingConfig.destinations.Night.ProcessingWindow = { Start: "20:00", End: "06:00" };
+            }
+            
+            // Gleiche Standardwerte auch in originalConfig setzen
+            if (!originalConfig.destinations) {
+                originalConfig.destinations = {};
+            }
+            if (!originalConfig.destinations.Night) {
+                originalConfig.destinations.Night = { ProcessingWindow: { Start: "20:00", End: "06:00" } };
+            }
+            if (!originalConfig.destinations.Night.ProcessingWindow) {
+                originalConfig.destinations.Night.ProcessingWindow = { Start: "20:00", End: "06:00" };
+            }
+            
+            isInitializing = false;
+        }
+
+        function loadConfig() {
+            fetch('/api/config')
+                .then(response => response.json())
+                .then(data => {
+                    config = JSON.parse(JSON.stringify(data)); // Deep copy
+                    originalConfig = JSON.parse(JSON.stringify(data)); // Deep copy
+                    workingConfig = JSON.parse(JSON.stringify(data)); // Deep copy
+                    updateUI();
+                })
+                .catch(error => {
+                    console.error('Fehler beim Laden der Konfiguration:', error);
+                    // Bei Fehler: Standardwerte verwenden
+                    setDefaultNightBatchTimes();
+                });
+        }
+
+        function updateUI() {
+            if (workingConfig.watchFolders && workingConfig.watchFolders.length > 0) {
+                document.getElementById('watchPath').value = workingConfig.watchFolders[0].Path;
+                document.getElementById('gracePeriod').value = workingConfig.watchFolders[0].GracePeriod;
+            }
+
+            if (workingConfig.destinations) {
+                document.getElementById('mamPath').value = workingConfig.destinations.MAM?.Path || 'C:\\Temp\\MAM';
+                document.getElementById('boxPath').value = workingConfig.destinations.BOX?.Path || 'C:\\Temp\\BOX';
+                document.getElementById('quarantinePath').value = workingConfig.quarantineFolder || 'C:\\Temp\\Quarantine';
+                
+                // Nachtverarbeitung-Zeitfenster aktualisieren
+                if (workingConfig.destinations.Night?.ProcessingWindow) {
+                    isInitializing = true;
+                    document.getElementById('nightStartTime').value = workingConfig.destinations.Night.ProcessingWindow.Start;
+                    document.getElementById('nightEndTime').value = workingConfig.destinations.Night.ProcessingWindow.End;
+                    isInitializing = false;
+                } else {
+                    // Standardwerte setzen wenn keine Konfiguration vorhanden
+                    isInitializing = true;
+                    if (!workingConfig.destinations.Night) {
+                        workingConfig.destinations.Night = { ProcessingWindow: { Start: "20:00", End: "06:00" } };
+                    }
+                    if (!workingConfig.destinations.Night.ProcessingWindow) {
+                        workingConfig.destinations.Night.ProcessingWindow = { Start: "20:00", End: "06:00" };
+                    }
+                    // Gleiche Standardwerte auch in originalConfig setzen
+                    if (!originalConfig.destinations.Night) {
+                        originalConfig.destinations.Night = { ProcessingWindow: { Start: "20:00", End: "06:00" } };
+                    }
+                    if (!originalConfig.destinations.Night.ProcessingWindow) {
+                        originalConfig.destinations.Night.ProcessingWindow = { Start: "20:00", End: "06:00" };
+                    }
+                    document.getElementById('nightStartTime').value = "20:00";
+                    document.getElementById('nightEndTime').value = "06:00";
+                    isInitializing = false;
+                }
+            }
+
+            // Buttons aktivieren/deaktivieren basierend auf Änderungen
+            updateButtonStates();
+        }
+
+        function updateButtonStates() {
+            const applyBtn = document.getElementById('applyChangesBtn');
+            const resetBtn = document.getElementById('resetChangesBtn');
+
+            if (hasUnsavedChanges) {
+                applyBtn.disabled = false;
+                applyBtn.classList.add('btn-primary');
+                applyBtn.classList.remove('btn-secondary');
+                resetBtn.disabled = false;
+                resetBtn.classList.add('btn-warning');
+                resetBtn.classList.remove('btn-secondary');
+            } else {
+                applyBtn.disabled = true;
+                applyBtn.classList.remove('btn-primary');
+                applyBtn.classList.add('btn-secondary');
+                resetBtn.disabled = true;
+                resetBtn.classList.remove('btn-warning');
+                resetBtn.classList.add('btn-secondary');
+            }
+        }
+
+        function updateWatchFolder(index, field, value) {
+            workingConfig.watchFolders[index][field] = value;
+            hasUnsavedChanges = true;
+            updateButtonStates();
+        }
+
+        function updateDestination(index, field, value) {
+            workingConfig.destinations[index][field] = value;
+            hasUnsavedChanges = true;
+            updateButtonStates();
+        }
+
+        function updateQuarantine(value) {
+            workingConfig.quarantineFolder = value;
+            hasUnsavedChanges = true;
+            updateButtonStates();
+        }
+
+        function updateNightBatchWindow(type, value) {
+            if (isInitializing) return;
+            
+            if (!workingConfig.destinations) {
+                workingConfig.destinations = {};
+            }
+            
+            if (!workingConfig.destinations.Night) {
+                workingConfig.destinations.Night = { ProcessingWindow: { Start: "20:00", End: "06:00" } };
+            }
+            if (!workingConfig.destinations.Night.ProcessingWindow) {
+                workingConfig.destinations.Night.ProcessingWindow = { Start: "20:00", End: "06:00" };
+            }
+            
+            if (type === 'start') {
+                workingConfig.destinations.Night.ProcessingWindow.Start = value;
+            } else if (type === 'end') {
+                workingConfig.destinations.Night.ProcessingWindow.End = value;
+            }
+            
+            hasUnsavedChanges = true;
+            updateButtonStates();
+        }
+
+        function applyChanges() {
+            fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(workingConfig)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    originalConfig = JSON.parse(JSON.stringify(workingConfig));
+                    config = JSON.parse(JSON.stringify(workingConfig));
+                    hasUnsavedChanges = false;
+                    updateButtonStates();
+                    alert('Konfiguration erfolgreich gespeichert!');
+                } else {
+                    alert('Fehler beim Speichern: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Fehler beim Speichern der Konfiguration: ' + error.message);
+            });
+        }
+
+        function resetChanges() {
+            if (confirm('Alle Änderungen verwerfen und zur letzten gespeicherten Version zurückkehren?')) {
+                workingConfig = JSON.parse(JSON.stringify(originalConfig));
+                hasUnsavedChanges = false;
+                updateUI();
+            }
+        }
+
+        function testFile() {
+            fetch('/api/create-test-file', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Test-Datei erfolgreich erstellt:\n' + data.filePath);
+                    // Neue Aktivität zum Log hinzufügen
+                    addActivityToLog('Test-Datei erstellt', data.message, new Date().toISOString());
+                    loadActivityLog(); // Log neu laden
+                } else {
+                    alert('Fehler beim Erstellen der Test-Datei: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Fehler beim Erstellen der Test-Datei: ' + error.message);
+            });
+        }
+
+        function openFolder() {
+            alert('Watch-Ordner: ' + document.getElementById('watchPath').value);
+        }
+        
+        function refreshActivityLog() {
+            loadActivityLog();
+        }
+        
+        function browseFolder(elementId) {
+            // Verwende ein einfaches Prompt für Pfad-Eingabe
+            const currentPath = document.getElementById(elementId).value;
+            const newPath = prompt('Ordner-Pfad eingeben:', currentPath || 'C:\\Temp');
+            
+            if (newPath && newPath.trim()) {
+                document.getElementById(elementId).value = newPath.trim();
+                // Trigger the oninput event manually
+                document.getElementById(elementId).dispatchEvent(new Event('input'));
+            }
+        }
+        
+        function loadActivityLog() {
+            loadActivities();
+            loadErrors();
+        }
+        
+        function loadActivities() {
+            fetch('/api/activities')
+                .then(response => response.json())
+                .then(activities => {
+                    displayActivities(activities);
+                })
+                .catch(error => console.error('Fehler beim Laden der Aktivitäten:', error));
+        }
+        
+        function loadErrors() {
+            fetch('/api/errors')
+                .then(response => response.json())
+                .then(errors => {
+                    displayErrors(errors);
+                })
+                .catch(error => console.error('Fehler beim Laden der Fehler:', error));
+        }
+        
+        function displayActivities(activities) {
+            const container = document.getElementById('activitiesList');
+            container.innerHTML = '<h4 style="margin: 0 0 10px 0; color: #27ae60;">Aktivitäten</h4>';
+            
+            if (!activities || activities.length === 0) {
+                container.innerHTML += '<p style="color: #666; font-style: italic;">Keine aktuellen Aktivitäten</p>';
+                return;
+            }
+            
+            activities.forEach(activity => {
+                const activityDiv = document.createElement('div');
+                activityDiv.style.cssText = 'padding: 8px; margin: 5px 0; background: white; border-radius: 4px; border-left: 4px solid #27ae60;';
+                
+                const time = new Date(activity.timestamp).toLocaleString('de-DE');
+                activityDiv.innerHTML = `
+                    <div style="font-weight: bold; color: #27ae60;">${activity.title}</div>
+                    <div style="color: #666; margin: 2px 0;">${activity.description}</div>
+                    <div style="font-size: 12px; color: #999;">${time}</div>
+                `;
+                container.appendChild(activityDiv);
+            });
+        }
+        
+        function displayErrors(errors) {
+            const container = document.getElementById('errorsList');
+            container.innerHTML = '<h4 style="margin: 0 0 10px 0; color: #e74c3c;">Fehler</h4>';
+            
+            if (!errors || errors.length === 0) {
+                container.innerHTML += '<p style="color: #666; font-style: italic;">Keine aktuellen Fehler</p>';
+                return;
+            }
+            
+            errors.forEach(error => {
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = 'padding: 8px; margin: 5px 0; background: white; border-radius: 4px; border-left: 4px solid #e74c3c;';
+                
+                const time = new Date(error.timestamp).toLocaleString('de-DE');
+                errorDiv.innerHTML = `
+                    <div style="font-weight: bold; color: #e74c3c;">${error.title || 'Fehler'}</div>
+                    <div style="color: #666; margin: 2px 0;">${error.message || error.description}</div>
+                    <div style="font-size: 12px; color: #999;">${time}</div>
+                `;
+                container.appendChild(errorDiv);
+            });
+        }
+        
+        function addActivityToLog(title, description, timestamp) {
+            const container = document.getElementById('activitiesList');
+            
+            // Entferne "Keine aktuellen Aktivitäten" falls vorhanden
+            const noActivitiesMsg = container.querySelector('p[style*="font-style: italic"]');
+            if (noActivitiesMsg) {
+                noActivitiesMsg.remove();
+            }
+            
+            // Neue Aktivität hinzufügen
+            const activityDiv = document.createElement('div');
+            activityDiv.style.cssText = 'padding: 8px; margin: 5px 0; background: white; border-radius: 4px; border-left: 4px solid #27ae60;';
+            
+            const time = new Date(timestamp).toLocaleString('de-DE');
+            activityDiv.innerHTML = `
+                <div style="font-weight: bold; color: #27ae60;">${title}</div>
+                <div style="color: #666; margin: 2px 0;">${description}</div>
+                <div style="font-size: 12px; color: #999;">${time}</div>
+            `;
+            
+            // Neue Aktivität an den Anfang der Liste einfügen (nach dem Header)
+            const header = container.querySelector('h4');
+            if (header) {
+                header.insertAdjacentElement('afterend', activityDiv);
+            } else {
+                container.appendChild(activityDiv);
+            }
+        }
+        
+        function loadPerformanceMetrics() {
+            fetch('/api/performance')
+                .then(response => response.json())
+                .then(metrics => {
+                    updatePerformanceDisplay(metrics);
+                })
+                .catch(error => console.error('Fehler beim Laden der Performance-Metriken:', error));
+        }
+        
+        function updatePerformanceDisplay(metrics) {
+            if (!metrics) return;
+            
+            document.getElementById('cpuUsage').textContent = metrics.CpuUsagePercent + '%';
+            document.getElementById('memoryUsage').textContent = metrics.MemoryAvailableMB + ' MB';
+            document.getElementById('processingRate').textContent = metrics.ProcessingRatePerMinute + '/min';
+            document.getElementById('errorRate').textContent = metrics.ErrorRatePercent + '%';
+            document.getElementById('uptime').textContent = metrics.Uptime.Formatted;
+            document.getElementById('queueSize').textContent = metrics.QueueSize;
+            document.getElementById('filesProcessed').textContent = metrics.FilesProcessed;
+            
+            // Performance-Indikatoren einfärben
+            updatePerformanceColors(metrics);
+        }
+        
+        function updatePerformanceColors(metrics) {
+            // CPU Usage
+            const cpuEl = document.getElementById('cpuUsage');
+            cpuEl.style.color = metrics.CpuUsagePercent > 80 ? '#e74c3c' : 
+                               metrics.CpuUsagePercent > 50 ? '#f39c12' : '#3498db';
+            
+            // Memory (niedriger Wert = Problem)
+            const memEl = document.getElementById('memoryUsage');
+            memEl.style.color = metrics.MemoryAvailableMB < 100 ? '#e74c3c' : 
+                               metrics.MemoryAvailableMB < 500 ? '#f39c12' : '#27ae60';
+            
+            // Error Rate
+            const errorEl = document.getElementById('errorRate');
+            errorEl.style.color = metrics.ErrorRatePercent > 10 ? '#e74c3c' : 
+                                 metrics.ErrorRatePercent > 5 ? '#f39c12' : '#27ae60';
+        }
+        
+        function loadNightBatchStatus() {
+            fetch('/api/night-batch/status')
+                .then(response => response.json())
+                .then(status => {
+                    updateNightBatchDisplay(status);
+                })
+                .catch(error => console.error('Fehler beim Laden des Nachtverarbeitungs-Status:', error));
+        }
+        
+        function updateNightBatchDisplay(status) {
+            const container = document.getElementById('nightBatchStatus');
+            const startBtn = document.getElementById('startNightBatchBtn');
+            
+            let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">';
+            
+            // Verarbeitungsfenster Status
+            const windowStatus = status.processingWindow.isActive ? 
+                '<span style="color: #27ae60;">🟢 Aktiv</span>' : 
+                '<span style="color: #f39c12;">🟡 Inaktiv</span>';
+            
+            html += `
+                <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                    <div style="font-weight: bold;">Verarbeitungsfenster</div>
+                    <div>${status.processingWindow.start} - ${status.processingWindow.end}</div>
+                    <div>${windowStatus}</div>
+                </div>
+            `;
+            
+            // Night-Ordner Status
+            const folderStatus = status.nightFolder.exists ? 
+                '<span style="color: #27ae60;">✅ Verfügbar</span>' : 
+                '<span style="color: #e74c3c;">❌ Nicht gefunden</span>';
+            
+            html += `
+                <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                    <div style="font-weight: bold;">Night-Ordner</div>
+                    <div>${status.nightFolder.fileCount} Dateien</div>
+                    <div>${folderStatus}</div>
+                </div>
+            `;
+            
+            html += '</div>';
+            
+            // Letzte Verarbeitung
+            if (status.lastRun) {
+                const lastRunTime = new Date(status.lastRun.timestamp).toLocaleString('de-DE');
+                html += `
+                    <div style="padding: 10px; background: #e8f4fd; border-radius: 4px; margin-bottom: 10px;">
+                        <div style="font-weight: bold;">Letzte Verarbeitung: ${lastRunTime}</div>
+                        <div>${status.lastRun.filesProcessed} Dateien in ${status.lastRun.duration}</div>
+                        <div>Status: <span style="color: ${status.lastRun.status === 'success' ? '#27ae60' : '#e74c3c'};">${status.lastRun.status}</span></div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
+            
+            // Start-Button anzeigen/verstecken
+            if (status.canStartManually && status.nightFolder.fileCount > 0) {
+                startBtn.style.display = 'inline-block';
+            } else {
+                startBtn.style.display = 'none';
+            }
+        }
+        
+        function startNightBatch() {
+            if (!confirm('Nachtverarbeitung manuell starten? Dies kann einige Zeit in Anspruch nehmen.')) {
+                return;
+            }
+            
+            const btn = document.getElementById('startNightBatchBtn');
+            btn.disabled = true;
+            btn.textContent = '🔄 Verarbeitung läuft...';
+            
+            fetch('/api/night-batch/start', { method: 'POST' })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        alert('Nachtverarbeitung wurde gestartet!');
+                        addActivityToLog('Nachtverarbeitung gestartet', 'Manueller Start über Dashboard', new Date().toISOString());
+                        loadNightBatchStatus();
+                    } else {
+                        alert('Fehler beim Starten: ' + result.error);
+                    }
+                })
+                .catch(error => {
+                    alert('Fehler beim Starten der Nachtverarbeitung: ' + error.message);
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = '🌙 Nachtverarbeitung starten';
+                });
+        }
+    </script>
+</body>
+</html>

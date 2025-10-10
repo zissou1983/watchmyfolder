@@ -1,0 +1,56 @@
+# Watch My Folder - Gitignore
+# Ignoriere temporäre und Build-Dateien
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Node modules
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Backup/Test files
+backup/
+trash/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# Build outputs
+dist/
+build/
+*.exe
+*.msi
+
+# IDE files
+.vscode/
+.idea/
+*.suo
+*.user
+
+# PowerShell
+*.ps1xml
+
+# Custom
+DOC-UPDATE-STATUS.md
