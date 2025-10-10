@@ -185,20 +185,30 @@ class WatchEngine {
             
             $file = Get-Item $filePath
             
-            # Karenzzeit prüfen
+            # Karenzzeit prüfen (Minimum-Wartezeit)
             $gracePeriod = $this.Config.WatchFolders[0].GracePeriod
             $timeSinceEvent = (Get-Date) - $QueueItem.Timestamp
             if ($timeSinceEvent.TotalSeconds -lt $gracePeriod) {
                 return $false
             }
             
-            # Datei-Lock prüfen
+            # Datei-Lock prüfen (mehrfach für Sicherheit)
             if ($this.IsFileLocked($file)) {
                 return $false
             }
             
             # Größenstabilität prüfen
             if ($this.HasFileSizeChanged($file)) {
+                return $false
+            }
+            
+            # Zusätzlicher Stabilitätscheck: LastWriteTime
+            if ($this.IsFileStillBeingWritten($file)) {
+                return $false
+            }
+            
+            # Finale Sicherheitsprüfung: Nochmal Lock-Check
+            if ($this.IsFileLocked($file)) {
                 return $false
             }
             
@@ -220,27 +230,90 @@ class WatchEngine {
         }
     }
     
+    [bool] IsFileStillBeingWritten([System.IO.FileInfo]$File) {
+        try {
+            # Konfigurierbare Parameter verwenden
+            $maxWriteTimeThreshold = 2
+            $requireExclusiveAccess = $true
+            
+            if ($this.Config.Performance.FileReadiness) {
+                $maxWriteTimeThreshold = $this.Config.Performance.FileReadiness.MaxWriteTimeThreshold
+                $requireExclusiveAccess = $this.Config.Performance.FileReadiness.RequireExclusiveAccess
+            }
+            
+            # Prüfe ob LastWriteTime sehr recent ist
+            $timeSinceLastWrite = (Get-Date) - $File.LastWriteTime
+            if ($timeSinceLastWrite.TotalSeconds -lt $maxWriteTimeThreshold) {
+                $this.Logger.Debug("Datei noch zu frisch geschrieben: $($File.FullName) (vor $($timeSinceLastWrite.TotalSeconds)s)", @{})
+                return $true
+            }
+            
+            # Zusätzlicher Check: Versuche exklusiven Zugriff (wenn konfiguriert)
+            if ($requireExclusiveAccess) {
+                try {
+                    $stream = $File.Open([System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+                    $stream.Close()
+                    return $false  # Datei kann exklusiv geöffnet werden = fertig
+                } catch {
+                    $this.Logger.Debug("Datei noch exklusiv verwendet: $($File.FullName)", @{})
+                    return $true   # Datei ist noch in Verwendung
+                }
+            }
+            
+            return $false
+            
+        } catch {
+            $this.Logger.Debug("Fehler bei IsFileStillBeingWritten: $($_.Exception.Message)", @{ "File" = $File.FullName })
+            return $true  # Im Zweifel als 'noch nicht fertig' behandeln
+        }
+    }
+    
     [bool] HasFileSizeChanged([System.IO.FileInfo]$File) {
         $filePath = $File.FullName
         $currentSize = $File.Length
+        $currentLastWrite = $File.LastWriteTime
         
         if ($this.FileStates.ContainsKey($filePath)) {
             $lastSize = $this.FileStates[$filePath].Size
             $lastCheck = $this.FileStates[$filePath].LastCheck
+            $lastWriteTime = $this.FileStates[$filePath].LastWriteTime
             
             # Wenn sich die Größe geändert hat
             if ($currentSize -ne $lastSize) {
-                $this.FileStates[$filePath] = @{ "Size" = $currentSize; "LastCheck" = Get-Date }
+                $this.FileStates[$filePath] = @{ 
+                    "Size" = $currentSize
+                    "LastCheck" = Get-Date
+                    "LastWriteTime" = $currentLastWrite
+                }
                 return $true
             }
             
-            # Wenn die Größe gleich ist, aber weniger als 5 Sekunden vergangen sind
-            if ((Get-Date) - $lastCheck -lt [TimeSpan]::FromSeconds(5)) {
+            # Wenn sich LastWriteTime geändert hat (Datei wird noch geschrieben)
+            if ($currentLastWrite -ne $lastWriteTime) {
+                $this.FileStates[$filePath] = @{ 
+                    "Size" = $currentSize
+                    "LastCheck" = Get-Date
+                    "LastWriteTime" = $currentLastWrite
+                }
+                return $true
+            }
+            
+            # Konfigurierbare Mindest-Stabilität
+            $minStabilitySeconds = 3
+            if ($this.Config.Performance.FileReadiness) {
+                $minStabilitySeconds = $this.Config.Performance.FileReadiness.MinimumStabilitySeconds
+            }
+            
+            if ((Get-Date) - $lastCheck -lt [TimeSpan]::FromSeconds($minStabilitySeconds)) {
                 return $true
             }
         } else {
             # Erste Prüfung - Status speichern
-            $this.FileStates[$filePath] = @{ "Size" = $currentSize; "LastCheck" = Get-Date }
+            $this.FileStates[$filePath] = @{ 
+                "Size" = $currentSize
+                "LastCheck" = Get-Date
+                "LastWriteTime" = $currentLastWrite
+            }
             return $true
         }
         

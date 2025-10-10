@@ -3,8 +3,13 @@
                          {
                              "Path":  "C:\\Temp\\Incoming",
                              "Enabled":  true,
-                             "GracePeriod":  20,
-                             "RecursiveWatch":  true
+                             "GracePeriod":  30,
+                             "RecursiveWatch":  true,
+                             "FileReadinessChecks": {
+                                 "EnableSizeStabilityCheck": true,
+                                 "EnableLockCheck": true,
+                                 "EnableWriteTimeCheck": true
+                             }
                          }
                      ],
     "Destinations":  {
@@ -42,7 +47,13 @@
     "Performance":  {
                         "MaxConcurrentTransfers":  5,
                         "QueueMaxSize":  1000,
-                        "ProcessingInterval":  5
+                        "ProcessingInterval":  5,
+                        "FileReadiness": {
+                            "MinimumStabilitySeconds": 3,
+                            "MaxWriteTimeThreshold": 2,
+                            "RequireExclusiveAccess": true,
+                            "MaxRetryAttempts": 5
+                        }
                     },
     "Monitoring":  {
                        "WebPort":  8081,
