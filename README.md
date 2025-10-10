@@ -21,17 +21,17 @@ WatchFolder.bat
 
 ## 🚀 Features
 
-- ✅ **Native EXE-Anwendung** - Ein-Klick-Start ohne Abhängigkeiten
+- ✅ **Einfacher Batch-Launcher** - Ein-Klick-Start ohne Abhängigkeiten
 - ✅ **Electron-Dashboard** - Natives Windows-Fenster mit moderner UI
 - ✅ **Echtzeit-Überwachung** mit FileSystemWatcher
 - ✅ **Intelligente Klassifizierung** via Magic Numbers und Extensions
 - ✅ **Benutzerdefinierte Zielordner** mit eigenen Format-Konfigurationen
-- ✅ **Karenzzeit-Management** für sichere Dateiübertragung
+- ✅ **Robuste Dateibereitschafts-Erkennung** - Schutz vor unvollständigen Dateien
 - ✅ **Atomare Transfers** mit Checksummen-Validierung
 - ✅ **Sonderzeichen-Bereinigung** für BOX-Kompatibilität
 - ✅ **Umfassendes Logging** mit automatischer Rotation
 - ✅ **Nachtverarbeitung** für Batch-Jobs
-- ✅ **Professioneller Installer** mit Desktop-Verknüpfung
+- ✅ **Portable Lösung** - Keine Installation erforderlich
 
 ## ⚠️ Wichtige Hinweise
 
@@ -41,55 +41,27 @@ WatchFolder.bat
 
 ### **Systemanforderungen:**
 - Windows 10/11
-- Node.js (wird automatisch erkannt, Web-Dashboard als Fallback)
-- .NET Framework 4.7.2+ (für EXE)
+- PowerShell 5.1+ (Standard in Windows)
+- Node.js (optional - für Electron-Dashboard, Web-Dashboard als Fallback)
 
 ### **Ordner-Struktur:**
-- **Funktionsfähig:** Aktuelles Verzeichnis mit `WatchFolder.bat`  
-- **Archiv:** `trash/` enthält 27+ alte, nicht-funktionierende Versionen
-- **Deployment:** Für Produktion die `deploy/`-Skripte verwenden
+- **Launcher:** `WatchFolder.bat` - Einziger, funktionsfähiger Starter
+- **Source:** `src/` - Komplette PowerShell-Module und Services
+- **Config:** `config/` - Konfigurationsdateien
+- **Archiv:** `backup/` enthält 50+ experimentelle Versionen
 
 ## 🛠️ Installation & Start
 
-### Option 1: Portable Verwendung (Empfohlen)
 
-```cmd
-# Direkt aus dem Projektverzeichnis:
-WatchFolder.exe
-```
 
-✅ **Vorteile:**
-- Kein Installation nötig
-- Alle Dateien bleiben im Projektverzeichnis  
-- Sofortiger Start
-- Einfaches Update (neue EXE-Datei ersetzen)
 
-### Option 2: Vollständige Installation
-
-```cmd
-# Als Administrator ausführen:
-Install.bat
-```
-
-✅ **Features:**
-- Installation nach `C:\Program Files\WatchFolder`
-- Desktop-Verknüpfung wird erstellt
-- Startmenü-Eintrag (optional)
-- Professionelle Deinstallation möglich
-
-### Option 3: Backup-Start
-
-```cmd
-# Falls EXE-Probleme:
-WatchFolder.bat
-```
 
 ### Was passiert beim Start:
 
-1. **Backend-Service** startet versteckt im Hintergrund
-2. **Node.js-Prüfung** - Electron oder Web-Dashboard
+1. **WatchFolder.bat** startet Backend-Service versteckt
+2. **Node.js-Prüfung** - Electron oder Web-Dashboard  
 3. **Dashboard öffnet sich** - Natives Fenster oder Browser
-4. **Überwachung aktiv** - Sofortige Datei-Verarbeitung
+4. **Überwachung aktiv** - Sofortige, sichere Datei-Verarbeitung
 
 ### Manuelle Installation
 
@@ -242,10 +214,14 @@ Ziel: >80% Code-Coverage für alle Module
 ### Entwicklungsumgebung
 
 ```powershell
-# Entwicklungsinstallation
-.\deploy\Install-WatchFolder.ps1 -Environment Development -InstallPath "C:\Dev\WatchFolder"
+# Repository klonen
+git clone https://github.com/zissou1983/watchmyfolder.git
+cd watchmyfolder
 
-# VSCode Extensions installieren
+# Direkt starten zum Testen
+.\WatchFolder.bat
+
+# VSCode Extensions (optional)
 code --install-extension ms-vscode.powershell
 ```
 
