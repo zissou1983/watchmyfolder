@@ -25,7 +25,7 @@ class FormatClassifier {
         }
         
         # Formate aus Konfiguration laden, falls verfügbar
-        $configFormats = if ($this.Config -and $this.Config.PSObject.Properties.Name -contains "Formats") {
+        $configFormats = if ($this.Config -and $this.Config.ContainsKey("Formats") -and $this.Config.Formats) {
             $this.Config.Formats
         } else {
             $defaultFormats
@@ -34,29 +34,32 @@ class FormatClassifier {
         $this.FormatDatabase = @{}
         
         # MAM Formate
-        if ($configFormats.PSObject.Properties.Name -contains "MAM") {
+        $mamFormats = if ($configFormats -is [hashtable]) { $configFormats["MAM"] } else { $configFormats.MAM }
+        if ($mamFormats) {
             $this.FormatDatabase["Video_MAM"] = @{
-                "Extensions" = $configFormats.MAM
+                "Extensions" = $mamFormats
                 "Category" = "MAM"
             }
         }
         
         # BOX Formate
-        if ($configFormats.PSObject.Properties.Name -contains "BOX") {
+        $boxFormats = if ($configFormats -is [hashtable]) { $configFormats["BOX"] } else { $configFormats.BOX }
+        if ($boxFormats) {
             $this.FormatDatabase["Documents"] = @{
-                "Extensions" = $configFormats.BOX
+                "Extensions" = $boxFormats
                 "Category" = "BOX"
             }
         }
         
         # SYSTEM Formate
-        if ($configFormats.PSObject.Properties.Name -contains "SYSTEM") {
+        $sysFormats = if ($configFormats -is [hashtable]) { $configFormats["SYSTEM"] } else { $configFormats.SYSTEM }
+        if ($sysFormats) {
             $this.FormatDatabase["System"] = @{
-                "Extensions" = $configFormats.SYSTEM
+                "Extensions" = $sysFormats
                 "Category" = "SYSTEM"
             }
             $this.FormatDatabase["Camera_System"] = @{
-                "Extensions" = $configFormats.SYSTEM
+                "Extensions" = $sysFormats
                 "Patterns" = @("Thumbs.db", "desktop.ini", ".DS_Store")
                 "Category" = "SYSTEM"
             }
@@ -72,7 +75,7 @@ class FormatClassifier {
     
     [string] ClassifyFile([System.IO.FileInfo]$File) {
         try {
-            $this.Logger.Debug("Klassifiziere Datei: $($File.FullName)")
+            $this.Logger.Debug("Klassifiziere Datei: $($File.FullName)", @{})
             
             # System-Dateien prüfen
             if ($this.IsSystemFile($File)) {
@@ -92,7 +95,7 @@ class FormatClassifier {
             foreach ($format in $this.FormatDatabase.Keys) {
                 $formatInfo = $this.FormatDatabase[$format]
                 if ($formatInfo.Extensions -contains $extension) {
-                    $this.Logger.Debug("Datei klassifiziert als: $($formatInfo.Category)")
+                    $this.Logger.Debug("Datei klassifiziert als: $($formatInfo.Category)", @{})
                     return $formatInfo.Category
                 }
             }

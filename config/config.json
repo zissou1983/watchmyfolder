@@ -1,131 +1,140 @@
-﻿{
-    "WatchFolders":  [
-                         {
-                             "Path":  "C:\\Temp\\Incoming",
-                             "Enabled":  true,
-                             "GracePeriod":  30,
-                             "RecursiveWatch":  true,
-                             "FileReadinessChecks": {
-                                 "EnableSizeStabilityCheck": true,
-                                 "EnableLockCheck": true,
-                                 "EnableWriteTimeCheck": true
-                             }
-                         }
-                     ],
-    "Destinations":  {
-                         "MAM":  {
-                                     "Path":  "C:\\Temp\\MAM",
-                                     "Enabled":  true,
-                                     "PreserveFolderStructure":  true
-                                 },
-                         "BOX":  {
-                                     "Path":  "C:\\Temp\\BOX",
-                                     "Enabled":  true,
-                                     "SanitizeFilenames":  true,
-                                     "PreserveFolderStructure":  false
-                                 },
-                         "Night":  {
-                                       "Path":  "C:\\Temp\\Night",
-                                       "ProcessingWindow":  {
-                                                                "Start":  "20:00",
-                                                                "End":  "06:00"
-                                                            }
-                                   },
-                         "Quarantine":  {
-                                            "Path":  "C:\\Temp\\Quarantine",
-                                            "Enabled":  true,
-                                            "GroupByErrorType":  true,
-                                            "PreserveOriginalStructure":  true
-                                        }
-                     },
-    "Logging":  {
-                    "Level":  "Info",
-                    "Path":  "logs\\watchfolder.log",
-                    "MaxSizeMB":  100,
-                    "MaxFiles":  10
-                },
-    "Performance":  {
-                        "MaxConcurrentTransfers":  5,
-                        "QueueMaxSize":  1000,
-                        "ProcessingInterval":  5,
-                        "FileReadiness": {
-                            "MinimumStabilitySeconds": 3,
-                            "MaxWriteTimeThreshold": 2,
-                            "RequireExclusiveAccess": true,
-                            "MaxRetryAttempts": 5
-                        }
-                    },
-    "Monitoring":  {
-                       "WebPort":  8081,
-                       "EnableDashboard":  true,
-                       "AlertThresholds":  {
-                                               "QueueOverflow":  1000,
-                                               "ErrorRate":  5,
-                                               "TimeWindow":  10
-                                           }
-                   },
-    "Formats":  {
-                    "MAM":  [
-                                ".mxf",
-                                ".mp4",
-                                ".mov",
-                                ".mts",
-                                ".m2ts",
-                                ".ts",
-                                ".m4v",
-                                ".mkv",
-                                ".webm",
-                                ".mpg",
-                                ".mpeg",
-                                ".avi",
-                                ".3gp",
-                                ".divx",
-                                ".dv",
-                                ".flv",
-                                ".m2t",
-                                ".vob",
-                                ".wmv"
-                            ],
-                    "BOX":  [
-                                ".wav",
-                                ".aif",
-                                ".aiff",
-                                ".mp3",
-                                ".flac",
-                                ".m4a",
-                                ".ogg",
-                                ".pdf",
-                                ".doc",
-                                ".docx",
-                                ".txt",
-                                ".xlsx",
-                                ".pptx",
-                                ".jpg",
-                                ".jpeg",
-                                ".png",
-                                ".tiff",
-                                ".psd",
-                                ".raw",
-                                ".dng",
-                                ".aep",
-                                ".prproj",
-                                ".drp",
-                                ".edl",
-                                ".aaf",
-                                ".omf"
-                            ],
-                    "SYSTEM":  [
-                                   ".tmp",
-                                   ".log",
-                                   ".cache",
-                                   ".db",
-                                   ".ini",
-                                   ".sys",
-                                   ".bim",
-                                   ".cpi",
-                                   ".pek",
-                                   ".xmp",
-                                   ".xml"
-                               ]
-                }
+{
+  "WatchFolders": [
+    {
+      "Path": "C:\\Temp\\Incoming",
+      "Enabled": true,
+      "GracePeriod": 3,
+      "RecursiveWatch": true,
+      "FileReadinessChecks": {
+        "EnableSizeStabilityCheck": true,
+        "EnableLockCheck": true,
+        "EnableWriteTimeCheck": true
+      }
+    }
+  ],
+  "Destinations": {
+    "MAM": {
+      "Path": "C:\\Temp\\MAM",
+      "Enabled": true,
+      "PreserveFolderStructure": true
+    },
+    "BOX": {
+      "Path": "C:\\Temp\\BOX",
+      "Enabled": true,
+      "SanitizeFilenames": true,
+      "PreserveFolderStructure": false
+    },
+    "Night": {
+      "Path": "C:\\Temp\\Night",
+      "ProcessingWindow": {
+        "Start": "20:00",
+        "End": "06:00"
+      }
+    },
+    "Quarantine": {
+      "Path": "C:\\Temp\\Quarantine",
+      "Enabled": true,
+      "GroupByErrorType": true,
+      "PreserveOriginalStructure": true
+    }
+  },
+  "Logging": {
+    "Level": "Info",
+    "Path": "logs\\watchfolder.log",
+    "MaxSizeMB": 100,
+    "MaxFiles": 10
+  },
+  "Performance": {
+    "MaxConcurrentTransfers": 5,
+    "QueueMaxSize": 1000,
+    "ProcessingInterval": 5,
+    "SkipChecksumOnNetwork": true,
+    "FileReadiness": {
+      "MinimumStabilitySeconds": 3,
+      "MaxWriteTimeThreshold": 2,
+      "RequireExclusiveAccess": true,
+      "MaxRetryAttempts": 5
+    }
+  },
+  "Monitoring": {
+    "WebPort": 8081,
+    "EnableDashboard": true,
+    "AlertThresholds": {
+      "QueueOverflow": 1000,
+      "ErrorRate": 5,
+      "TimeWindow": 10
+    }
+  },
+  "Formats": {
+    "MAM": [
+      ".mxf",
+      ".mp4",
+      ".mov",
+      ".mts",
+      ".m2ts",
+      ".ts",
+      ".m4v",
+      ".mkv",
+      ".webm",
+      ".mpg",
+      ".mpeg",
+      ".avi",
+      ".3gp",
+      ".divx",
+      ".dv",
+      ".flv",
+      ".m2t",
+      ".vob",
+      ".wmv"
+    ],
+    "BOX": [
+      ".wav",
+      ".aif",
+      ".aiff",
+      ".mp3",
+      ".flac",
+      ".m4a",
+      ".ogg",
+      ".pdf",
+      ".doc",
+      ".docx",
+      ".txt",
+      ".xlsx",
+      ".pptx",
+      ".jpg",
+      ".jpeg",
+      ".png",
+      ".tiff",
+      ".psd",
+      ".raw",
+      ".dng",
+      ".aep",
+      ".prproj",
+      ".drp",
+      ".edl",
+      ".aaf",
+      ".omf"
+    ],
+    "SYSTEM": [
+      ".tmp",
+      ".log",
+      ".cache",
+      ".db",
+      ".ini",
+      ".sys",
+      ".bim",
+      ".cpi",
+      ".pek",
+      ".xmp",
+      ".xml"
+    ]
+  },
+  "CustomTabs": [],
+  "Options": {
+    "Autostart": true,
+    "Theme": "dark",
+    "NightBatchEnabled": false,
+    "NightBatchStartTime": "20:00",
+    "NightBatchEndTime": "06:00"
+  }
 }

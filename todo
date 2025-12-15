@@ -1,0 +1,40 @@
+Configuration loaded: Object
+dashboard-enhanced.js:758 Rendering MAM: formats = Array(19)
+dashboard-enhanced.js:758 Rendering BOX: formats = Array(26)
+dashboard-enhanced.js:758 Rendering SYSTEM: formats = Array(11)
+dashboard-enhanced.js:758 Rendering Quarantine: formats = Array(0)
+dashboard-enhanced.js:828 No custom tabs to render
+10Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+index.html:808 Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+index.html:808 Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+index.html:836 Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+index.html:836 Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+index.html:830 Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+index.html:830 Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+index.html:729 Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+index.html:729 Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+index.html:730 Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+index.html:730 Refused to execute inline event handler because it violates the following Content Security Policy directive: "script-src 'self'". Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present.
+
+dashboard-enhanced.js:419 === addCustomTab START ===
+dashboard-enhanced.js:420 dialogActive: false
+dashboard-enhanced.js:429 Set dialogActive to true
+dashboard-enhanced.js:433 Found old overlays: 0
+dashboard-enhanced.js:441 Created dialog with ID: dialog_1765793223930
+dashboard-enhanced.js:534 Input element created: <input type=​"text" placeholder=​"z.B. Archive, Backup, etc." autocomplete=​"off" spellcheck=​"true" style=​"display:​ block;​ width:​ calc(100% - 22px)​;​ box-sizing:​ border-box;​ padding:​ 10px 11px;​ margin:​ 0px;​ border:​ 1px solid var(--border-color)​;​ border-radius:​ 4px;​ background:​ var(--bg-secondary)​;​ color:​ var(--text-primary)​;​ font-size:​ 14px;​ font-family:​ inherit;​ pointer-events:​ auto !important;​ cursor:​ text !important;​ user-select:​ text !important;​ appearance:​ none;​">​
+dashboard-enhanced.js:582 Dialog added to DOM
+dashboard-enhanced.js:586 Input in DOM after append: true
+dashboard-enhanced.js:643 Setting up event listeners...
+dashboard-enhanced.js:646 Cancel button clicked
+dashboard-enhanced.js:590 Closing dialog: dialog_1765793223930
+dashboard-enhanced.js:595 Set dialogActive to false

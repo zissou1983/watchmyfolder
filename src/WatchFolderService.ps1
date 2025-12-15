@@ -1,24 +1,61 @@
 # Hauptservice für das Watch Folder System
 param(
-    [string]$ConfigPath,
+    [string]$ConfigPath = "$PSScriptRoot\..\config\config.json",
     [switch]$Debug
 )
 
 # Module laden (vor Klassendefinition)
-try {
-    . "$PSScriptRoot\modules\Logger.ps1"
-    . "$PSScriptRoot\modules\SystemFileFilter.ps1" 
-    . "$PSScriptRoot\modules\FormatClassifier.ps1"
-    . "$PSScriptRoot\modules\PerformanceMonitor.ps1"
-    . "$PSScriptRoot\modules\OperationTracker.ps1"  # Vor RoutingEngine laden
-    . "$PSScriptRoot\modules\WatchEngine.ps1"
-    . "$PSScriptRoot\modules\RoutingEngine.ps1"
-    . "$PSScriptRoot\api\StatusAPI.ps1"
-    
-    Start-Sleep -Milliseconds 100
-} catch {
-    Write-Error "Fehler beim Laden der Module: $($_.Exception.Message)"
-    exit 1
+$requiredModules = @(
+    "$PSScriptRoot\modules\Logger.ps1",
+    "$PSScriptRoot\modules\SystemFileFilter.ps1",
+    "$PSScriptRoot\modules\FormatClassifier.ps1",
+    "$PSScriptRoot\modules\PerformanceMonitor.ps1",
+    "$PSScriptRoot\modules\OperationTracker.ps1",
+    "$PSScriptRoot\modules\WatchEngine.ps1",
+    "$PSScriptRoot\modules\RoutingEngine.ps1",
+    "$PSScriptRoot\api\StatusAPI.ps1"
+)
+
+foreach ($module in $requiredModules) {
+    if (-not (Test-Path $module)) {
+        Write-Error "Modul nicht gefunden: $module"
+        exit 1
+    }
+    try {
+        . $module
+        Write-Host "Modul geladen: $(Split-Path $module -Leaf)" -ForegroundColor Green
+    } catch {
+        Write-Error "Fehler beim Laden von $module`: $($_.Exception.Message)"
+        exit 1
+    }
+}
+
+Start-Sleep -Milliseconds 100
+
+# Hilfsfunktion: PSObject zu Hashtable konvertieren
+function ConvertTo-Hashtable($obj) {
+    $hash = @{}
+    if ($obj -is [PSCustomObject]) {
+        $obj.PSObject.Properties | ForEach-Object {
+            if ($_.Value -is [PSCustomObject]) {
+                $hash[$_.Name] = ConvertTo-Hashtable $_.Value
+            } elseif ($_.Value -is [Array]) {
+                $hash[$_.Name] = @()
+                foreach ($item in $_.Value) {
+                    if ($item -is [PSCustomObject]) {
+                        $hash[$_.Name] += ConvertTo-Hashtable $item
+                    } else {
+                        $hash[$_.Name] += $item
+                    }
+                }
+            } else {
+                $hash[$_.Name] = $_.Value
+            }
+        }
+    } else {
+        return $obj
+    }
+    return $hash
 }
 
 # Service-Funktionen (ohne Klasse)
@@ -47,10 +84,7 @@ function New-WatchFolderService {
     $configObj = $configContent | ConvertFrom-Json
     
     # PSCustomObject zu Hashtable konvertieren
-    $service.Config = @{}
-    $configObj.PSObject.Properties | ForEach-Object {
-        $service.Config[$_.Name] = $_.Value
-    }
+    $service.Config = ConvertTo-Hashtable $configObj
     
     # Komponenten initialisieren
     $service.Logger = [Logger]::new($service.Config.Logging.Path, $service.Config.Logging.Level)
@@ -65,35 +99,25 @@ function New-WatchFolderService {
     # OperationTracker mit RoutingEngine verbinden
     $service.RoutingEngine.SetOperationTracker($service.OperationTracker)
     
-    # Status API in separatem Job starten (mit ScriptBlock der alles neu lädt)
+    # WatchEngine mit RoutingEngine verbinden
+    $service.WatchEngine.FileReadyCallback = {
+        param($File)
+        $service.RoutingEngine.RouteFile($File)
+    }
+    
+    # StatusAPI instanziieren
+    $service.StatusAPI = [StatusAPI]::new($service.Logger, $service, 8082)
+    $service.RoutingEngine.SetStatusAPI($service.StatusAPI)
+    
+    # StatusAPI in separatem Job starten
     $service.StatusAPIJob = Start-Job -ScriptBlock {
-        param($scriptRoot, $loggerPath, $configPath, $port)
-        
-        # Module und Klassen neu laden im Job
-        . "$scriptRoot\modules\Logger.ps1"
-        . "$scriptRoot\api\StatusAPI.ps1"
-        
-        $logger = [Logger]::new($loggerPath, "Info")
-        $config = Get-Content $configPath | ConvertFrom-Json
-        $service = @{ Config = $config; IsRunning = $true; WatchEngine = $null; OperationTracker = $null }
-        $api = [StatusAPI]::new($logger, $service, $port)
-        
+        param($statusAPI)
         try {
-            $api.Start()
+            $statusAPI.Start()
         } catch {
             Write-Host "StatusAPI Fehler: $($_.Exception.Message)" -ForegroundColor Red
         }
-    } -ArgumentList $PSScriptRoot, "$PSScriptRoot\..\logs\statusapi.log", $ConfigPath, 8082
-    
-    # Callback setzen
-    $service.WatchEngine.FileReadyCallback = { 
-        param($File)
-        if (-not $service.SystemFilter.IsSystemFile($File)) {
-            # Operation starten
-            $service.OperationTracker.StartOperation($File.FullName, "file_processing")
-            $service.RoutingEngine.RouteFile($File)
-        }
-    }
+    } -ArgumentList $service.StatusAPI
     
     Write-Host "Alle Komponenten erfolgreich initialisiert" -ForegroundColor Green
     return $service
@@ -118,13 +142,14 @@ function Start-WatchFolderService {
     # Watch Engines starten
     foreach ($watchFolder in $Service.Config.WatchFolders) {
         if ($watchFolder.Enabled) {
-            Write-Host "Ueberspringe Ueberwachung fuer: $($watchFolder.Path) (Debug-Modus)" -ForegroundColor Yellow
-            # try {
-            #     $Service.WatchEngine.Start($watchFolder.Path)
-            # } catch {
-            #     Write-Host "Fehler beim Starten der Überwachung für $($watchFolder.Path): $($_.Exception.Message)" -ForegroundColor Red
-            #     # Bei Fehler trotzdem fortfahren
-            # }
+            Write-Host "Starte Ueberwachung fuer: $($watchFolder.Path)" -ForegroundColor Cyan
+            try {
+                $Service.WatchEngine.Start($watchFolder.Path)
+                Write-Host "Ueberwachung gestartet fuer: $($watchFolder.Path)" -ForegroundColor Green
+            } catch {
+                Write-Host "Fehler beim Starten der Ueberwachung fuer $($watchFolder.Path): $($_.Exception.Message)" -ForegroundColor Red
+                # Bei Fehler trotzdem fortfahren
+            }
         }
     }
     
@@ -132,13 +157,65 @@ function Start-WatchFolderService {
     Write-Host "Watch Folder Service erfolgreich gestartet" -ForegroundColor Green
     Write-Host "Service läuft kontinuierlich. Verwenden Sie Ctrl+C zum Beenden." -ForegroundColor Cyan
     
+    # Timing-Variablen für manuelle Timer-Simulation
+    $lastPollingTime = Get-Date
+    $lastProcessingTime = Get-Date
+    $lastHealthCheckTime = Get-Date
+    $pollingIntervalMs = 10000  # 10 Sekunden für Polling
+    $processingIntervalMs = 5000  # 5 Sekunden für Queue-Verarbeitung
+    $healthCheckIntervalMs = 60000  # 60 Sekunden für Health Check
+    
     # StatusAPI und Service parallel laufen lassen
     try {
         # StatusAPI läuft bereits im Hauptthread
         
         # Hauptschleife - Service läuft kontinuierlich
+        # WICHTIG: Wir rufen Timer-Funktionen DIREKT auf statt auf Events zu warten
+        # Das ist ein Workaround für PowerShell Register-ObjectEvent Probleme mit Klassenmethoden
+        $errorCount = 0
         while ($Service.IsRunning) {
-            Start-Sleep -Seconds 1
+            $now = Get-Date
+            
+            # Polling ausführen (alle 10 Sekunden)
+            if (($now - $lastPollingTime).TotalMilliseconds -ge $pollingIntervalMs) {
+                try {
+                    $Service.WatchEngine.PollForChanges()
+                } catch {
+                    $errorCount++
+                    if ($errorCount -le 3) {  # Nur erste 3 Fehler ausgeben
+                        Write-Host "POLLING FEHLER: $($_.Exception.Message)" -ForegroundColor Red
+                    }
+                }
+                $lastPollingTime = $now
+            }
+            
+            # Queue-Verarbeitung ausführen (alle 5 Sekunden)
+            if (($now - $lastProcessingTime).TotalMilliseconds -ge $processingIntervalMs) {
+                try {
+                    $Service.WatchEngine.ProcessQueue()
+                } catch {
+                    $errorCount++
+                    if ($errorCount -le 3) {  # Nur erste 3 Fehler ausgeben
+                        Write-Host "QUEUE FEHLER: $($_.Exception.Message)" -ForegroundColor Red
+                    }
+                }
+                $lastProcessingTime = $now
+            }
+            
+            # Health Check ausführen (alle 60 Sekunden)
+            if (($now - $lastHealthCheckTime).TotalMilliseconds -ge $healthCheckIntervalMs) {
+                if ($Service.WatchEngine.IsNetworkPath) {
+                    try {
+                        $Service.WatchEngine.CheckWatcherHealth()
+                    } catch {
+                        # Fehler beim Health Check ignorieren
+                    }
+                }
+                $lastHealthCheckTime = $now
+            }
+            
+            # Kurze Pause, damit CPU nicht vollständig ausgelastet wird
+            Start-Sleep -Milliseconds 100
         }
         
     } finally {

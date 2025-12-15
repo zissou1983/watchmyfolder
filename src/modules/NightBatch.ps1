@@ -13,20 +13,20 @@ class NightBatchProcessor {
     
     [void] ProcessNightFolder() {
         if (-not $this.IsProcessingWindow()) {
-            $this.Logger.Info("Außerhalb des Verarbeitungsfensters")
+            $this.Logger.Info("Außerhalb des Verarbeitungsfensters", @{})
             return
         }
         
         $nightPath = $this.Config.Destinations.Night.Path
         if (-not (Test-Path $nightPath)) {
-            $this.Logger.Warning("Night-Ordner nicht gefunden: $nightPath")
+            $this.Logger.Warning("Night-Ordner nicht gefunden: $nightPath", @{})
             return
         }
         
-        $this.Logger.Info("Starte Nachtverarbeitung: $nightPath")
+        $this.Logger.Info("Starte Nachtverarbeitung: $nightPath", @{})
         
         $files = Get-ChildItem -Path $nightPath -File -Recurse | Where-Object { $_.LastWriteTime -lt (Get-Date).AddHours(-1) }
-        $this.Logger.Info("Gefunden: $($files.Count) Dateien zur Verarbeitung")
+        $this.Logger.Info("Gefunden: $($files.Count) Dateien zur Verarbeitung", @{})
         
         $processed = 0
         $errors = 0
@@ -37,11 +37,11 @@ class NightBatchProcessor {
                 $processed++
                 
                 if ($processed % 100 -eq 0) {
-                    $this.Logger.Info("Fortschritt: $processed/$($files.Count) Dateien verarbeitet")
+                    $this.Logger.Info("Fortschritt: $processed/$($files.Count) Dateien verarbeitet", @{})
                 }
             } catch {
                 $errors++
-                $this.Logger.Error("Fehler bei Datei: $($file.FullName) - $($_.Exception.Message)")
+                $this.Logger.Error("Fehler bei Datei: $($file.FullName) - $($_.Exception.Message)", @{})
             }
         }
         
@@ -71,7 +71,7 @@ class NightBatchProcessor {
             $this.Logger.Info("Datei neu klassifiziert als $category", @{ "File" = $File.FullName })
             $this.RoutingEngine.RouteFile($File)
         } else {
-            $this.Logger.Debug("Datei bleibt unbekannt: $($File.FullName)")
+            $this.Logger.Debug("Datei bleibt unbekannt: $($File.FullName)", @{})
         }
     }
 }

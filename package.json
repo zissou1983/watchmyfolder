@@ -5,12 +5,83 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:portable": "electron-builder --win portable"
   },
-  "dependencies": {
-    "electron": "^25.0.0"
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^25.0.0",
+    "electron-builder": "^24.13.3"
   },
-  "devDependencies": {},
+  "build": {
+    "appId": "com.archive.watchfolder",
+    "productName": "WatchFolder Dashboard",
+    "copyright": "Copyright © 2025",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "config/**/*",
+      "gfx/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "config",
+        "to": "config",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "src",
+        "to": "src",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "logs",
+        "to": "logs",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "gfx/watcher.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "WatchFolder Dashboard"
+    },
+    "portable": {
+      "artifactName": "WatchFolder-Portable-${version}.${ext}"
+    }
+  },
   "author": "",
   "license": "ISC"
 }

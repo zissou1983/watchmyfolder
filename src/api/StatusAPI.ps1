@@ -4,20 +4,27 @@ class StatusAPI {
     [Logger]$Logger
     [hashtable]$Service
     [bool]$IsRunning
+    [System.Collections.Generic.List[hashtable]]$History
+    [string]$HistoryFilePath
 
     StatusAPI([Logger]$Logger, [hashtable]$Service, [int]$Port = 8080) {
         $this.Logger = $Logger
         $this.Service = $Service
         $this.Listener = New-Object System.Net.HttpListener
-        $this.Listener.Prefixes.Add("http://localhost:$Port/")
+        $this.Listener.Prefixes.Add("http://+:$Port/")
+        $this.Listener.Prefixes.Add("http://127.0.0.1:$Port/")
         $this.IsRunning = $false
+        $this.History = New-Object System.Collections.Generic.List[hashtable]
+        # HistoryFilePath: src/api im Job, also 3x Parent-Verzeichnis + logs
+        $this.HistoryFilePath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "logs\history.json"
+        $this.LoadHistory()
     }
 
     [void] Start() {
         try {
             $this.Listener.Start()
             $this.IsRunning = $true
-            $this.Logger.Info("Status API gestartet auf: $($this.Listener.Prefixes[0])")
+            $this.Logger.Info("Status API gestartet auf: $($this.Listener.Prefixes[0])", @{})
 
             while ($this.IsRunning -and $this.Listener.IsListening) {
                 $context = $this.Listener.GetContext()
@@ -33,7 +40,7 @@ class StatusAPI {
         if ($this.Listener.IsListening) {
             $this.Listener.Stop()
         }
-        $this.Logger.Info("Status API gestoppt")
+        $this.Logger.Info("Status API gestoppt", @{})
     }
 
     [void] HandleRequest([System.Net.HttpListenerContext]$Context) {
@@ -58,6 +65,12 @@ class StatusAPI {
                 "/api/active-operations" { $this.GetActiveOperations() }
                 "/api/cancel-operation" { $this.CancelOperation($request) }
                 "/api/create-test-file" { $this.CreateTestFile($request) }
+                "/api/history" { $this.GetHistory() }
+                "/api/config" {
+                    if ($method -eq "GET") { $this.GetConfig() }
+                    elseif ($method -eq "POST") { $this.UpdateConfig($request) }
+                    else { @{ "error" = "Method not allowed" } }
+                }
                 "/api/formats" {
                     if ($method -eq "GET") { $this.GetFormats() }
                     elseif ($method -eq "POST") { $this.UpdateFormats($request) }
@@ -90,6 +103,58 @@ class StatusAPI {
             "isRunning" = $this.Service.IsRunning
             "queueSize" = if ($this.Service.WatchEngine) { $this.Service.WatchEngine.FileQueue.Count } else { 0 }
             "uptime" = 3600
+        }
+    }
+
+    [hashtable] GetConfig() {
+        try {
+            if ($this.Service.Config) {
+                # Erstelle eine Kopie der Konfiguration
+                $configCopy = $this.Service.Config | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+                return $configCopy
+            } else {
+                # Lade Konfiguration aus Datei
+                $configPath = "$PSScriptRoot\..\..\config\config.json"
+                if (Test-Path $configPath) {
+                    $config = Get-Content $configPath -Encoding UTF8 | ConvertFrom-Json
+                    return $config
+                } else {
+                    return @{ "error" = "Konfigurationsdatei nicht gefunden" }
+                }
+            }
+        } catch {
+            $this.Logger.Error("Fehler beim Abrufen der Konfiguration: $($_.Exception.Message)", @{ "Exception" = $_.Exception.Message })
+            return @{ "error" = $_.Exception.Message }
+        }
+    }
+
+    [hashtable] UpdateConfig([System.Net.HttpListenerRequest]$Request) {
+        try {
+            $reader = New-Object System.IO.StreamReader($Request.InputStream)
+            $jsonData = $reader.ReadToEnd()
+            $data = $jsonData | ConvertFrom-Json
+
+            # Speichere die neue Konfiguration
+            $configPath = "$PSScriptRoot\..\..\config\config.json"
+            $data | ConvertTo-Json -Depth 10 | Set-Content $configPath -Encoding UTF8
+
+            # Aktualisiere die Service-Konfiguration
+            if ($this.Service) {
+                $this.Service.Config = $data
+            }
+
+            $this.Logger.Info("Konfiguration aktualisiert", @{})
+
+            return @{
+                "success" = $true
+                "message" = "Konfiguration erfolgreich gespeichert"
+            }
+        } catch {
+            $this.Logger.Error("Fehler beim Aktualisieren der Konfiguration: $($_.Exception.Message)", @{ "Exception" = $_.Exception.Message })
+            return @{
+                "success" = $false
+                "error" = $_.Exception.Message
+            }
         }
     }
 
@@ -232,13 +297,97 @@ Zeitstempel: $timestamp
         }
     }
 
+    [void] AddHistoryEntry([string]$FileName, [string]$SourceFolder, [string]$DestinationFolder) {
+        try {
+            $entry = @{
+                "timestamp" = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                "timestampMs" = [int64](Get-Date -UFormat %s)*1000
+                "filename" = $FileName
+                "source" = $SourceFolder
+                "destination" = $DestinationFolder
+                "message" = "$FileName von $SourceFolder in $DestinationFolder bewegt."
+            }
+            
+            $this.History.Add($entry)
+            $this.SaveHistory()
+            
+            # Nur die letzten 100 Einträge behalten
+            if ($this.History.Count -gt 100) {
+                $this.History.RemoveAt(0)
+                $this.SaveHistory()
+            }
+        } catch {
+            $this.Logger.Error("Fehler beim Hinzufügen des History-Eintrags: $($_.Exception.Message)", @{})
+        }
+    }
+
+    [void] LoadHistory() {
+        try {
+            if (Test-Path $this.HistoryFilePath) {
+                $json = Get-Content $this.HistoryFilePath -Raw -ErrorAction SilentlyContinue
+                if ($json) {
+                    $entries = $json | ConvertFrom-Json -AsHashtable -ErrorAction SilentlyContinue
+                    if ($entries -is [array]) {
+                        foreach ($entry in $entries) {
+                            $this.History.Add($entry)
+                        }
+                    } elseif ($entries) {
+                        $this.History.Add($entries)
+                    }
+                }
+            }
+        } catch {
+            $this.Logger.Error("Fehler beim Laden der History: $($_.Exception.Message)", @{})
+        }
+    }
+
+    [void] SaveHistory() {
+        try {
+            $historyDir = Split-Path $this.HistoryFilePath
+            if (!(Test-Path $historyDir)) {
+                New-Item -ItemType Directory -Path $historyDir -Force | Out-Null
+            }
+            
+            $sortedHistory = $this.History | Sort-Object timestampMs -Descending
+            $json = $sortedHistory | ConvertTo-Json -Depth 10
+            Set-Content -Path $this.HistoryFilePath -Value $json -Force -ErrorAction SilentlyContinue
+        } catch {
+            $this.Logger.Error("Fehler beim Speichern der History: $($_.Exception.Message)", @{})
+        }
+    }
+
+    [hashtable] GetHistory() {
+        try {
+            # Wenn die History leer ist, versuche von Datei zu laden
+            if ($this.History.Count -eq 0) {
+                $this.LoadHistory()
+            }
+
+            # Neueste Einträge zuerst
+            $sortedHistory = $this.History | Sort-Object timestampMs -Descending
+            
+            return @{
+                "success" = $true
+                "history" = $sortedHistory
+                "totalEntries" = $this.History.Count
+            }
+        } catch {
+            $this.Logger.Error("Fehler beim Abrufen der History: $($_.Exception.Message)", @{})
+            return @{
+                "success" = $false
+                "error" = $_.Exception.Message
+                "history" = @()
+            }
+        }
+    }
+
     [string] GetDashboard() {
         # Dashboard HTML wird aus separater Datei geladen
-        $dashboardPath = "$PSScriptRoot\dashboard\index.html"
+        $dashboardPath = Join-Path (Split-Path $PSScriptRoot -Parent) "dashboard\index.html"
         if (Test-Path $dashboardPath) {
             return Get-Content $dashboardPath -Raw -Encoding UTF8
         } else {
-            return "<html><body><h1>Dashboard nicht gefunden</h1></body></html>"
+            return "<html><body><h1>Dashboard nicht gefunden: $dashboardPath</h1><p>PSScriptRoot: $PSScriptRoot</p></body></html>"
         }
     }
 }
